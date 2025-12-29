@@ -14,6 +14,7 @@ Raspberry Pi OS 上で動作する **AI ロボット制御用 Python ソフト�
 開発機で動作確認できる `--dry-run` を用意しています（Zenoh/hardware 依存なし）。
 
 ```bash
+python3 -m pip install -r requirements.txt
 python3 -m pip install -e .
 python3 -m unittest discover -s tests
 
@@ -99,3 +100,11 @@ sudo systemctl enable --now dmc-ai-mobility.service
 - `src/dmc_ai_mobility/app/robot_node.py` が統合ノード（subscribe/publish/deadman）です。
 - 実機ドライバはオプション依存です（例: `pigpio`, `mpu9250_jmdev`, `opencv-python`, `zenoh`）。
 - 依存は `pyproject.toml` の optional extras に分けています。
+
+## requirements.txt のインストール
+
+このリポジトリには `requirements.txt` も用意しています。
+
+```bash
+python3 -m pip install -r requirements.txt
+```
