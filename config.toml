@@ -1,0 +1,5 @@
+[gpio]
+pin_l = 19
+pin_r = 12
+sw1 = 8
+sw2 = 7
