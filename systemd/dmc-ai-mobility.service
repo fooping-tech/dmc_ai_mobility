@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/dmc_ai_mobility
 Environment=PYTHONPATH=/opt/dmc_ai_mobility/src
-ExecStart=/usr/bin/python3 -m dmc_ai_mobility.app.cli robot --config /opt/dmc_ai_mobility/config.toml
+ExecStart=/bin/sh -lc 'if command -v libcamerify >/dev/null 2>&1; then exec libcamerify /usr/bin/python3 -m dmc_ai_mobility.app.cli robot --config /opt/dmc_ai_mobility/config.toml; else exec /usr/bin/python3 -m dmc_ai_mobility.app.cli robot --config /opt/dmc_ai_mobility/config.toml; fi'
 Restart=on-failure
 RestartSec=2
 

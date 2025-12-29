@@ -101,6 +101,20 @@ sudo systemctl enable --now dmc-ai-mobility.service
 - 実機ドライバはオプション依存です（例: `pigpio`, `mpu9250_jmdev`, `opencv-python`, `zenoh`）。
 - 依存は `pyproject.toml` の optional extras に分けています。
 
+## よくあるログ: `camera read failed`
+
+`camera read failed` は OpenCV (`cv2.VideoCapture`) がフレームを取得できていない状態です（デバイス未認識、権限、libcamera/libcamerify 未設定など）。
+
+- 一旦カメラ無しで起動: `./scripts/run_robot.sh ./config.toml --no-camera`
+- `/dev/video*` が出ているか確認（Raspberry Pi + libcamera 構成の場合は `libcamerify` が必要なことがあります）
+
+### libcamerify が必要な環境
+
+`examples/example_camera.py` が `libcamerify python3 ...` で動く環境では、本体も `libcamerify` 経由で起動する必要があります。
+
+- `scripts/run_robot.sh` は `libcamerify` が見つかる場合は自動で `libcamerify` 経由で起動します（無効化したい場合は `DMC_USE_LIBCAMERIFY=0`）。
+- systemd も `libcamerify` が存在すれば自動で使用するようにしてあります（`systemd/dmc-ai-mobility.service`）。
+
 ## requirements.txt のインストール
 
 このリポジトリには `requirements.txt` も用意しています。
