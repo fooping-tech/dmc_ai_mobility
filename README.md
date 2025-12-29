@@ -98,7 +98,7 @@ sudo systemctl enable --now dmc-ai-mobility.service
 ## 開発メモ
 
 - `src/dmc_ai_mobility/app/robot_node.py` が統合ノード（subscribe/publish/deadman）です。
-- 実機ドライバはオプション依存です（例: `pigpio`, `mpu9250_jmdev`, `opencv-python`, `zenoh`）。
+- 実機ドライバは環境依存です（例: `pigpio`, `mpu9250_jmdev`, `opencv-python`, `eclipse-zenoh`, `adafruit-circuitpython-ssd1306`）。
 - 依存は `pyproject.toml` の optional extras に分けています。
 
 ## よくあるログ: `camera read failed`

@@ -17,6 +17,7 @@ zenoh = ["eclipse-zenoh"]
 camera = ["opencv-python"]
 motor = ["pigpio"]
 imu = ["mpu9250-jmdev"]
+oled = ["adafruit-blinka", "adafruit-circuitpython-ssd1306", "pillow"]
 
 [project.scripts]
 dmc-ai-mobility = "dmc_ai_mobility.app.cli:main"

@@ -12,7 +12,7 @@ from dmc_ai_mobility.core.types import MotorCmd, OledCmd
 from dmc_ai_mobility.drivers.camera_v4l2 import MockCameraDriver, OpenCVCameraConfig, OpenCVCameraDriver
 from dmc_ai_mobility.drivers.imu import MockImuDriver, Mpu9250ImuDriver, MpuImuConfig
 from dmc_ai_mobility.drivers.motor import MockMotorDriver, PigpioMotorConfig, PigpioMotorDriver
-from dmc_ai_mobility.drivers.oled import MockOledDriver
+from dmc_ai_mobility.drivers.oled import MockOledDriver, Ssd1306OledConfig, Ssd1306OledDriver
 from dmc_ai_mobility.zenoh import keys
 from dmc_ai_mobility.zenoh.pubsub import publish_json, subscribe_json
 from dmc_ai_mobility.zenoh.session import ZenohOpenOptions, open_session
@@ -67,6 +67,18 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
             except Exception as e:
                 logger.warning("camera driver unavailable; disabling camera (%s)", e)
                 no_camera = True
+
+        try:
+            oled = Ssd1306OledDriver(
+                Ssd1306OledConfig(
+                    i2c_port=config.oled.i2c_port,
+                    i2c_address=config.oled.i2c_address,
+                    width=config.oled.width,
+                    height=config.oled.height,
+                )
+            )
+        except Exception as e:
+            logger.warning("oled driver unavailable; using mock (%s)", e)
 
     stop_event = threading.Event()
 

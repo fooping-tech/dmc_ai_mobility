@@ -28,3 +28,6 @@ dist/
 # Calibration outputs (often generated in repo root)
 imu_config.json
 motor_config.json
+
+# Local zenoh config (environment-specific)
+zenoh_remote.json5

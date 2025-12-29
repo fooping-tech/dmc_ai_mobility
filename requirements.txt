@@ -6,3 +6,6 @@ eclipse-zenoh
 pigpio
 mpu9250-jmdev
 opencv-python
+adafruit-blinka
+adafruit-circuitpython-ssd1306
+pillow

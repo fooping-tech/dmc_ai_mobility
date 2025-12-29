@@ -31,6 +31,10 @@ class ImuConfig:
 @dataclass(frozen=True)
 class OledConfig:
     max_hz: float = 10.0
+    i2c_port: int = 1
+    i2c_address: int = 0x3C
+    width: int = 128
+    height: int = 32
 
 
 @dataclass(frozen=True)
@@ -91,7 +95,13 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
         ),
         motor=MotorConfig(deadman_ms=int(motor.get("deadman_ms", MotorConfig.deadman_ms))),
         imu=ImuConfig(publish_hz=float(imu.get("publish_hz", ImuConfig.publish_hz))),
-        oled=OledConfig(max_hz=float(oled.get("max_hz", OledConfig.max_hz))),
+        oled=OledConfig(
+            max_hz=float(oled.get("max_hz", OledConfig.max_hz)),
+            i2c_port=int(oled.get("i2c_port", OledConfig.i2c_port)),
+            i2c_address=int(oled.get("i2c_address", OledConfig.i2c_address)),
+            width=int(oled.get("width", OledConfig.width)),
+            height=int(oled.get("height", OledConfig.height)),
+        ),
         camera=CameraConfig(
             enable=bool(camera.get("enable", CameraConfig.enable)),
             device=int(camera.get("device", CameraConfig.device)),

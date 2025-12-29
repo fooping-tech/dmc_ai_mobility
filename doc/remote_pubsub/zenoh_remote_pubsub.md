@@ -14,6 +14,10 @@
 
     python3 -m pip install eclipse-zenoh
 
+最小操作スクリプト:
+
+- `examples/remote_zenoh_tool.py`（このリポジトリに同梱）
+
 ## ネットワーク構成（おすすめ）
 
 複数マシンで確実に見通すには「Zenoh Router」を1台立て、全ノードをそこへ接続する構成がおすすめです。
@@ -38,6 +42,21 @@
 
 以降の例ではこの `zenoh_remote.json5` を使います。
 
+テンプレート:
+
+- `doc/remote_pubsub/zenoh_remote.json5.example`
+
+### もっと簡単にする方法（おすすめ）
+
+設定ファイルを作らずに、`--connect` で接続先を指定できます（`examples/remote_zenoh_tool.py`）。
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --connect "tcp/<ROUTER_IP>:7447" imu
+
+また、環境変数 `ZENOH_CONFIG` に json5 ファイルパスを設定しておけば、`--zenoh-config` を省略できます（eclipse-zenoh 標準）。
+
+    export ZENOH_CONFIG=/path/to/zenoh_remote.json5
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 imu
+
 ## 共通: セッションを開く最小コード
 
     import zenoh
@@ -55,6 +74,9 @@ payload（JSON）例:
 - `deadman_ms`: 途絶時に停止するまでの猶予（ms）
 
 実行例（`robot_id=rasp-zero-01`）:
+
+    # (推奨) 付属の最小ツール
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 motor --v-l 0.10 --v-r 0.10 --duration-s 2
 
     python3 - <<'PY'
     import json, time
@@ -86,6 +108,8 @@ payload（JSON）例:
 
 止める（ゼロ指令を数回投げる）:
 
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 stop
+
     python3 - <<'PY'
     import json, time
     import zenoh
@@ -110,6 +134,8 @@ payload（JSON）例:
 - `dmc_robo/<robot_id>/imu/state`
 
 実行例:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 imu
 
     python3 - <<'PY'
     import zenoh
@@ -137,6 +163,8 @@ payload（JSON）例:
 
 実行例:
 
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 oled --text "Hello from remote"
+
     python3 - <<'PY'
     import json, time
     import zenoh
@@ -161,6 +189,8 @@ payload（JSON）例:
 - meta: `dmc_robo/<robot_id>/camera/meta`
 
 JPEG は bytes のまま届くので、ファイルに保存できます。
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera --out-dir ./camera_frames --print-meta
 
     python3 - <<'PY'
     import json

@@ -14,6 +14,10 @@ publish_hz = 50
 
 [oled]
 max_hz = 10
+i2c_port = 1
+i2c_address = 0x3C
+width = 128
+height = 32
 
 [camera]
 enable = true
