@@ -86,7 +86,7 @@ class OpenCVCameraDriver:
             ok, frame = self._cap.read()
         except Exception:
             ok, frame = False, None
-        if not ok:
+        if not ok or frame is None:
             self._fail_count += 1
             now_ms = time.monotonic() * 1000.0
             # Throttle warnings to avoid flooding logs when the camera disappears.
@@ -112,6 +112,8 @@ class OpenCVCameraDriver:
                 except Exception as e:
                     logger.debug("camera reopen failed: %s", e)
             return None
+        # Successful read: clear transient failure state.
+        self._fail_count = 0
         ok, buf = self._cv2.imencode(".jpg", frame)
         if not ok:
             logger.warning("camera jpeg encode failed")
