@@ -111,7 +111,7 @@ def open_session(*, dry_run: bool, options: ZenohOpenOptions) -> Session:
 
     if options.config_path:
         cfg = zenoh_mod.Config.from_file(str(options.config_path))
-        sess = zenoh_mod.open(cfg)
     else:
-        sess = zenoh_mod.open()
+        cfg = zenoh_mod.Config()
+    sess = zenoh_mod.open(cfg)
     return ZenohSession(sess)
