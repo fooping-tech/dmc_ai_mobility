@@ -44,11 +44,26 @@ class OpenCVCameraDriver:
         self._last_reopen_ms = 0.0
 
     def _open_capture(self):
-        # Prefer V4L2 backend when available (common on Raspberry Pi / Linux).
-        args = (self._device,)
+        # Prefer V4L2 backend when available (common on Raspberry Pi / Linux),
+        # but fall back to the default backend if CAP_V4L2 behaves poorly in a given setup.
+        cap = None
+        last_err: Exception | None = None
+        candidates = []
         if hasattr(self._cv2, "CAP_V4L2"):
-            args = (self._device, self._cv2.CAP_V4L2)
-        cap = self._cv2.VideoCapture(*args)
+            candidates.append((self._device, self._cv2.CAP_V4L2))
+        candidates.append((self._device,))
+
+        for args in candidates:
+            try:
+                cap = self._cv2.VideoCapture(*args)
+                if cap.isOpened():
+                    break
+            except Exception as e:  # pragma: no cover
+                last_err = e
+                cap = None
+
+        if cap is None:
+            raise RuntimeError(f"camera open failed (device={self._device})") from last_err
         cap.set(self._cv2.CAP_PROP_FRAME_WIDTH, self._width)
         cap.set(self._cv2.CAP_PROP_FRAME_HEIGHT, self._height)
         if not cap.isOpened():
@@ -59,11 +74,18 @@ class OpenCVCameraDriver:
         logger.info("camera opened (device=%s, %sx%s)", self._device, self._width, self._height)
         # Warm up auto exposure by discarding a few frames.
         for _ in range(10):
-            cap.read()
+            try:
+                cap.read()
+                time.sleep(0.05)
+            except Exception:
+                break
         return cap
 
     def read_jpeg(self) -> Optional[Tuple[bytes, int, int]]:
-        ok, frame = self._cap.read()
+        try:
+            ok, frame = self._cap.read()
+        except Exception:
+            ok, frame = False, None
         if not ok:
             self._fail_count += 1
             now_ms = time.monotonic() * 1000.0
