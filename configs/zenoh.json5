@@ -1,0 +1,3 @@
+// Zenoh configuration file (json5).
+// Leave empty to use zenoh defaults, or define peers/routers as needed.
+{}

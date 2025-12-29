@@ -1,0 +1,15 @@
+[Unit]
+Description=DMC AI Mobility robot node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dmc_ai_mobility
+Environment=PYTHONPATH=/opt/dmc_ai_mobility/src
+ExecStart=/usr/bin/python3 -m dmc_ai_mobility.app.cli robot --config /opt/dmc_ai_mobility/config.toml
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dmc-ai-mobility"
+version = "0.1.0"
+description = "DMC AI Mobility robot control software (Zenoh + Raspberry Pi)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "tomli>=2.0.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+zenoh = ["zenoh"]
+camera = ["opencv-python"]
+motor = ["pigpio"]
+imu = ["mpu9250-jmdev"]
+
+[project.scripts]
+dmc-ai-mobility = "dmc_ai_mobility.app.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

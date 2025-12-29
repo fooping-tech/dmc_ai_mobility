@@ -1,5 +1,27 @@
+robot_id = "rasp-zero-01"
+
 [gpio]
 pin_l = 19
 pin_r = 12
 sw1 = 8
 sw2 = 7
+
+[motor]
+deadman_ms = 300
+
+[imu]
+publish_hz = 50
+
+[oled]
+max_hz = 10
+
+[camera]
+enable = true
+device = 0
+width = 640
+height = 480
+fps = 10
+
+[zenoh]
+# Optional: path to a zenoh config file (json5).
+# config_path = "configs/zenoh.json5"

@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+import json
+import logging
+import threading
+from pathlib import Path
+from typing import Optional
+
+from dmc_ai_mobility.core.config import RobotConfig
+from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
+from dmc_ai_mobility.core.types import MotorCmd, OledCmd
+from dmc_ai_mobility.drivers.camera_v4l2 import MockCameraDriver, OpenCVCameraConfig, OpenCVCameraDriver
+from dmc_ai_mobility.drivers.imu import MockImuDriver, Mpu9250ImuDriver, MpuImuConfig
+from dmc_ai_mobility.drivers.motor import MockMotorDriver, PigpioMotorConfig, PigpioMotorDriver
+from dmc_ai_mobility.drivers.oled import MockOledDriver
+from dmc_ai_mobility.zenoh import keys
+from dmc_ai_mobility.zenoh.pubsub import publish_json, subscribe_json
+from dmc_ai_mobility.zenoh.session import ZenohOpenOptions, open_session
+
+logger = logging.getLogger(__name__)
+
+
+def _load_motor_trim(path: Path) -> float:
+    try:
+        if not path.exists():
+            return 0.0
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return float(data.get("trim") or 0.0)
+    except Exception:
+        return 0.0
+
+
+def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
+    robot_id = config.robot_id
+
+    zenoh_cfg = ZenohOpenOptions(
+        config_path=Path(config.zenoh.config_path) if config.zenoh.config_path else None
+    )
+    session = open_session(dry_run=dry_run, zenoh=zenoh_cfg)
+
+    motor = MockMotorDriver()
+    imu = MockImuDriver()
+    oled = MockOledDriver()
+    camera = MockCameraDriver()
+
+    if not dry_run:
+        try:
+            trim = _load_motor_trim(Path("configs/motor_config.json"))
+            motor = PigpioMotorDriver(
+                PigpioMotorConfig(pin_l=config.gpio.pin_l, pin_r=config.gpio.pin_r, trim=trim)
+            )
+        except Exception as e:
+            logger.warning("motor driver unavailable; using mock (%s)", e)
+
+        try:
+            imu = Mpu9250ImuDriver(MpuImuConfig())
+        except Exception as e:
+            logger.warning("imu driver unavailable; using mock (%s)", e)
+
+        if config.camera.enable and not no_camera:
+            try:
+                camera = OpenCVCameraDriver(
+                    OpenCVCameraConfig(
+                        device=config.camera.device, width=config.camera.width, height=config.camera.height
+                    )
+                )
+            except Exception as e:
+                logger.warning("camera driver unavailable; disabling camera (%s)", e)
+                no_camera = True
+
+    stop_event = threading.Event()
+
+    last_motor_cmd_ms: Optional[int] = None
+    motor_deadman_ms = int(config.motor.deadman_ms)
+    motor_active = False
+    if dry_run:
+        # Provide a no-input safety demonstration path: the deadman triggers after startup.
+        last_motor_cmd_ms = monotonic_ms()
+        motor_active = True
+
+    def on_motor_cmd(data: dict) -> None:
+        nonlocal last_motor_cmd_ms, motor_deadman_ms, motor_active
+        try:
+            cmd = MotorCmd.from_dict(data)
+        except Exception as e:
+            logger.warning("invalid motor cmd: %s", e)
+            return
+        motor_deadman_ms = int(cmd.deadman_ms or motor_deadman_ms)
+        motor.set_velocity_mps(cmd.v_l, cmd.v_r)
+        last_motor_cmd_ms = monotonic_ms()
+        motor_active = True
+
+    last_oled_update_ms: int = 0
+
+    def on_oled_cmd(data: dict) -> None:
+        nonlocal last_oled_update_ms
+        try:
+            cmd = OledCmd.from_dict(data)
+        except Exception as e:
+            logger.warning("invalid oled cmd: %s", e)
+            return
+        now = monotonic_ms()
+        min_interval_ms = int(1000.0 / max(config.oled.max_hz, 1.0))
+        if now - last_oled_update_ms < min_interval_ms:
+            return
+        oled.show_text(cmd.text)
+        last_oled_update_ms = now
+
+    subs = [
+        subscribe_json(session, keys.motor_cmd(robot_id), on_motor_cmd),
+        subscribe_json(session, keys.oled_cmd(robot_id), on_oled_cmd),
+    ]
+
+    def imu_loop() -> None:
+        sleeper = PeriodicSleeper(config.imu.publish_hz)
+        key = keys.imu_state(robot_id)
+        while not stop_event.is_set():
+            state = imu.read()
+            publish_json(session, key, state.to_dict())
+            sleeper.sleep()
+
+    imu_thread = threading.Thread(target=imu_loop, name="imu_loop", daemon=True)
+    imu_thread.start()
+
+    camera_thread: Optional[threading.Thread] = None
+    if config.camera.enable and not no_camera:
+        def camera_loop() -> None:
+            sleeper = PeriodicSleeper(config.camera.fps)
+            key_img = keys.camera_image_jpeg(robot_id)
+            key_meta = keys.camera_meta(robot_id)
+            seq = 0
+            while not stop_event.is_set():
+                frame = camera.read_jpeg()
+                if frame:
+                    jpeg, w, h = frame
+                    session.publish(key_img, jpeg)
+                    publish_json(
+                        session,
+                        key_meta,
+                        {"width": w, "height": h, "fps": config.camera.fps, "seq": seq, "ts_ms": wall_clock_ms()},
+                    )
+                    seq += 1
+                sleeper.sleep()
+
+        camera_thread = threading.Thread(target=camera_loop, name="camera_loop", daemon=True)
+        camera_thread.start()
+
+    logger.info("robot node started (robot_id=%s)", robot_id)
+
+    try:
+        while not stop_event.is_set():
+            now = monotonic_ms()
+            if motor_active and last_motor_cmd_ms is not None and (now - last_motor_cmd_ms) > motor_deadman_ms:
+                logger.warning("deadman timeout -> motor stop")
+                motor.stop()
+                motor_active = False
+            stop_event.wait(0.05)
+    except KeyboardInterrupt:
+        logger.info("shutdown requested")
+    finally:
+        stop_event.set()
+        try:
+            for sub in subs:
+                try:
+                    sub.close()
+                except Exception:
+                    pass
+        finally:
+            try:
+                motor.stop()
+            except Exception:
+                pass
+            try:
+                motor.close()
+            except Exception:
+                pass
+            try:
+                imu.close()
+            except Exception:
+                pass
+            try:
+                camera.close()
+            except Exception:
+                pass
+            try:
+                oled.close()
+            except Exception:
+                pass
+            try:
+                session.close()
+            except Exception:
+                pass
+
+    if imu_thread.is_alive():
+        imu_thread.join(timeout=1.0)
+    if camera_thread and camera_thread.is_alive():
+        camera_thread.join(timeout=1.0)
+
+    return 0
