@@ -2,7 +2,7 @@
 tomli>=2.0.0; python_version < "3.11"
 
 # Zenoh + hardware-related dependencies (required)
-zenoh
+eclipse-zenoh
 pigpio
 mpu9250-jmdev
 opencv-python

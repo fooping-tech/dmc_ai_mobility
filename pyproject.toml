@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-zenoh = ["zenoh"]
+zenoh = ["eclipse-zenoh"]
 camera = ["opencv-python"]
 motor = ["pigpio"]
 imu = ["mpu9250-jmdev"]

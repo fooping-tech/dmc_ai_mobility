@@ -106,7 +106,7 @@ def open_session(*, dry_run: bool, zenoh: ZenohOpenOptions) -> Session:
         import zenoh  # type: ignore
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
-            "zenoh python package is required unless --dry-run is used"
+            "zenoh module is required unless --dry-run is used (pip install eclipse-zenoh)"
         ) from e
 
     if zenoh.config_path:
