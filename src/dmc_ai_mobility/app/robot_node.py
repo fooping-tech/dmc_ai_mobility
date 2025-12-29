@@ -36,7 +36,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     zenoh_cfg = ZenohOpenOptions(
         config_path=Path(config.zenoh.config_path) if config.zenoh.config_path else None
     )
-    session = open_session(dry_run=dry_run, zenoh=zenoh_cfg)
+    session = open_session(dry_run=dry_run, options=zenoh_cfg)
 
     motor = MockMotorDriver()
     imu = MockImuDriver()

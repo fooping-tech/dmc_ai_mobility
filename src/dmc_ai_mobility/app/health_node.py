@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def run_health(config: RobotConfig, *, dry_run: bool) -> int:
     session = open_session(
         dry_run=dry_run,
-        zenoh=ZenohOpenOptions(config_path=Path(config.zenoh.config_path) if config.zenoh.config_path else None),
+        options=ZenohOpenOptions(config_path=Path(config.zenoh.config_path) if config.zenoh.config_path else None),
     )
 
     stop_event = threading.Event()

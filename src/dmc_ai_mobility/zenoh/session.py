@@ -98,20 +98,20 @@ class ZenohSession:
         self._session.close()
 
 
-def open_session(*, dry_run: bool, zenoh: ZenohOpenOptions) -> Session:
+def open_session(*, dry_run: bool, options: ZenohOpenOptions) -> Session:
     if dry_run:
         return DryRunSession()
 
     try:
-        import zenoh  # type: ignore
+        import zenoh as zenoh_mod  # type: ignore
     except Exception as e:  # pragma: no cover
         raise RuntimeError(
             "zenoh module is required unless --dry-run is used (pip install eclipse-zenoh)"
         ) from e
 
-    if zenoh.config_path:
-        cfg = zenoh.Config.from_file(str(zenoh.config_path))
-        sess = zenoh.open(cfg)
+    if options.config_path:
+        cfg = zenoh_mod.Config.from_file(str(options.config_path))
+        sess = zenoh_mod.open(cfg)
     else:
-        sess = zenoh.open()
+        sess = zenoh_mod.open()
     return ZenohSession(sess)
