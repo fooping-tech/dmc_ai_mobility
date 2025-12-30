@@ -18,6 +18,11 @@ def _build_parser() -> argparse.ArgumentParser:
     robot.add_argument("--robot-id", type=str, default=None)
     robot.add_argument("--dry-run", action="store_true", help="Run without Zenoh/hardware; logs I/O")
     robot.add_argument("--no-camera", action="store_true", help="Disable camera loop")
+    robot.add_argument(
+        "--log-all-cmd",
+        action="store_true",
+        help="Log every received motor/oled command (can be very noisy at high Hz).",
+    )
     robot.add_argument("--log-level", type=str, default=None)
 
     health = sub.add_parser("health", help="Run health/heartbeat publisher")
@@ -39,7 +44,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.robot_id:
             overrides["robot_id"] = args.robot_id
         config = load_config(args.config, overrides=overrides or None)
-        return run_robot(config, dry_run=bool(args.dry_run), no_camera=bool(args.no_camera))
+        return run_robot(
+            config,
+            dry_run=bool(args.dry_run),
+            no_camera=bool(args.no_camera),
+            log_all_cmd=bool(args.log_all_cmd),
+        )
 
     if args.cmd == "health":
         overrides = {}

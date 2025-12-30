@@ -52,7 +52,7 @@ def _lidar_front_distance(points: list[dict], *, window_deg: float, stat: str) -
     return (sum(dists) / len(dists), len(dists))
 
 
-def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
+def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool, log_all_cmd: bool = False) -> int:
     robot_id = config.robot_id
 
     zenoh_cfg = ZenohOpenOptions(
@@ -125,19 +125,36 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     last_motor_cmd_ms: Optional[int] = None
     motor_deadman_ms = int(config.motor.deadman_ms)
     motor_active = False
+    last_motor_log_ms: int = 0
     if dry_run:
         # Provide a no-input safety demonstration path: the deadman triggers after startup.
         last_motor_cmd_ms = monotonic_ms()
         motor_active = True
 
     def on_motor_cmd(data: dict) -> None:
-        nonlocal last_motor_cmd_ms, motor_deadman_ms, motor_active
+        nonlocal last_motor_cmd_ms, motor_deadman_ms, motor_active, last_motor_log_ms
         try:
             # motor/cmd（JSON）を解釈して左右速度（m/s）を適用する。
             cmd = MotorCmd.from_dict(data)
         except Exception as e:
             logger.warning("invalid motor cmd: %s", e)
             return
+        # 受信した指令をログ表示（ターミナルで確認しやすいように間引きあり）。
+        # NOTE: 指令は高頻度になり得るため、ログが流れすぎないように上限を設ける。
+        now = monotonic_ms()
+        motor_log_max_hz = 10.0
+        motor_log_min_interval_ms = int(1000.0 / motor_log_max_hz)
+        if log_all_cmd or (now - last_motor_log_ms >= motor_log_min_interval_ms):
+            logger.info(
+                "motor cmd: v_l=%.3f v_r=%.3f unit=%s deadman_ms=%s seq=%s ts_ms=%s",
+                cmd.v_l,
+                cmd.v_r,
+                cmd.unit,
+                cmd.deadman_ms,
+                cmd.seq,
+                cmd.ts_ms,
+            )
+            last_motor_log_ms = now
         # deadman の ms は送信側から上書きできる（未指定なら config の値を維持）。
         motor_deadman_ms = int(cmd.deadman_ms or motor_deadman_ms)
         motor.set_velocity_mps(cmd.v_l, cmd.v_r)
@@ -154,11 +171,15 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
         except Exception as e:
             logger.warning("invalid oled cmd: %s", e)
             return
+        if log_all_cmd:
+            logger.info("oled cmd (recv): text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
         now = monotonic_ms()
         min_interval_ms = int(1000.0 / max(config.oled.max_hz, 1.0))
         # OLED への更新頻度を上限で制限（画面更新の負荷/ちらつき抑制）。
         if now - last_oled_update_ms < min_interval_ms:
             return
+        if not log_all_cmd:
+            logger.info("oled cmd: text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
         oled.show_text(cmd.text)
         last_oled_update_ms = now
 
