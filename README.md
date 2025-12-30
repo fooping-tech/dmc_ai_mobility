@@ -96,6 +96,12 @@ sudo systemctl enable --now dmc-ai-mobility.service
 ./scripts/run_robot.sh ./config.toml --dry-run --no-camera --robot-id devbot
 ```
 
+実機運用では引数なしで起動できます（`./config.toml` をデフォルト設定として使用します）:
+
+```bash
+./scripts/run_robot.sh
+```
+
 ## 開発メモ
 
 - `src/dmc_ai_mobility/app/robot_node.py` が統合ノード（subscribe/publish/deadman）です。
