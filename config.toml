@@ -10,7 +10,7 @@ sw2 = 7
 deadman_ms = 300
 # deadband around neutral pulsewidth (1500 ± deadband_pw). If both motors fall within
 # this band, outputs are treated as stop (pulsewidth=0 for both).
-deadband_pw = 0
+deadband_pw = 10
 
 [imu]
 publish_hz = 50
