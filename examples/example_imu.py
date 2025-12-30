@@ -5,7 +5,7 @@ from pathlib import Path
 from mpu9250_jmdev.registers import *
 from mpu9250_jmdev.mpu_9250 import MPU9250
 
-CONFIG_PATH = Path(__file__).resolve().parents[1] / "imu_config.json"
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "configs" / "imu_config.json"
 
 
 def load_offsets(path):

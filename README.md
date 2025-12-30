@@ -8,6 +8,7 @@ Raspberry Pi OS 上で動作する **AI ロボット制御用 Python ソフト�
 - camera: JPEG とメタデータを Publish（任意）
 
 設計の概要は `docs/dmc_ai_mobility_software_design.md` を参照してください。
+キャリブレーション手順は `docs/calibration.md` を参照してください。
 
 ## Quickstart（ハード無し / Zenoh 無し）
 

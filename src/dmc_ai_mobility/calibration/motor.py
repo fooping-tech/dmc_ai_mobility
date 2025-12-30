@@ -13,7 +13,9 @@ except ImportError:
         tomllib = None
 
 # GPIO
-CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.toml"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_PATH = REPO_ROOT / "config.toml"
+SAVE_PATH = REPO_ROOT / "configs" / "motor_config.json"
 DEFAULT_GPIO = {"pin_l": 19, "pin_r": 12, "sw1": 8, "sw2": 7}
 
 
@@ -45,7 +47,6 @@ SW1 = gpio["sw1"]
 SW2 = gpio["sw2"]
 
 # パラメータ
-SAVE_FILE = "motor_config.json"
 BASE_SPEED = 40  # テスト走行速度
 TRIM = 0.0       # 補正値 (正なら左寄り、負なら右寄り)
 
@@ -107,9 +108,10 @@ try:
         time.sleep(0.05)
 
     # Save
-    with open(SAVE_FILE, 'w') as f:
+    SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with SAVE_PATH.open("w", encoding="utf-8") as f:
         json.dump({"trim": TRIM}, f)
-    print(f"Calibration saved to {SAVE_FILE}")
+    print(f"Calibration saved to {SAVE_PATH}")
 
 finally:
     pi.set_servo_pulsewidth(PIN_L, 0)

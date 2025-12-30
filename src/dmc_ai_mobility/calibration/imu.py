@@ -1,5 +1,6 @@
 import time
 import json
+from pathlib import Path
 from mpu9250_jmdev.registers import *
 from mpu9250_jmdev.mpu_9250 import MPU9250
 
@@ -58,10 +59,12 @@ if success_count > 0:
 
     print("Calibration Result:", offsets)
 
-    with open("imu_config.json", "w") as f:
+    save_path = Path(__file__).resolve().parents[3] / "configs" / "imu_config.json"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    with save_path.open("w", encoding="utf-8") as f:
         json.dump(offsets, f)
         
-    print("Saved to imu_config.json")
+    print(f"Saved to {save_path}")
 else:
     print("[ERROR] Could not read any data from Gyro.")
     print("Please check wiring (VCC, GND, SDA, SCL).")

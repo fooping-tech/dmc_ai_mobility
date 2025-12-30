@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from dmc_ai_mobility.core.timing import wall_clock_ms
 from dmc_ai_mobility.core.types import ImuState
 
 logger = logging.getLogger(__name__)
+
+
+def _load_gyro_offsets(path: Path) -> tuple[float, float, float]:
+    try:
+        if not path.exists():
+            return (0.0, 0.0, 0.0)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return (
+            float(data.get("gx_off") or 0.0),
+            float(data.get("gy_off") or 0.0),
+            float(data.get("gz_off") or 0.0),
+        )
+    except Exception:
+        return (0.0, 0.0, 0.0)
 
 
 class ImuDriver(Protocol):
@@ -55,9 +71,16 @@ class Mpu9250ImuDriver:
         except OSError:  # pragma: no cover
             logger.warning("IMU magnetometer init failed; continuing with gyro only")
 
+        self._gx_off, self._gy_off, self._gz_off = _load_gyro_offsets(Path("configs/imu_config.json"))
+
     def read(self) -> ImuState:
         gx, gy, gz = self._mpu.readGyroscopeMaster()
-        return ImuState(gx=float(gx), gy=float(gy), gz=float(gz), ts_ms=wall_clock_ms())
+        return ImuState(
+            gx=float(gx) - self._gx_off,
+            gy=float(gy) - self._gy_off,
+            gz=float(gz) - self._gz_off,
+            ts_ms=wall_clock_ms(),
+        )
 
     def close(self) -> None:
         return

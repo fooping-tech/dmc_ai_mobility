@@ -40,7 +40,7 @@ gpio = load_gpio(GPIO_CONFIG_PATH)
 PIN_L = gpio["pin_l"]
 PIN_R = gpio["pin_r"]
 
-MOTOR_CONFIG_PATH = Path(__file__).resolve().parents[1] / "motor_config.json"
+MOTOR_CONFIG_PATH = Path(__file__).resolve().parents[1] / "configs" / "motor_config.json"
 BASE_SPEED = 40
 RUN_SECONDS = 3
 
