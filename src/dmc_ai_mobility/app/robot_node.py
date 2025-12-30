@@ -36,8 +36,10 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     zenoh_cfg = ZenohOpenOptions(
         config_path=Path(config.zenoh.config_path) if config.zenoh.config_path else None
     )
+    # Zenoh セッションを開き、以降は subscribe/publish をこの session 経由で行う。
     session = open_session(dry_run=dry_run, options=zenoh_cfg)
 
+    # デフォルトは mock ドライバ（dry_run や初期化失敗時でもプロセスを起動できるようにする）。
     motor = MockMotorDriver()
     imu = MockImuDriver()
     oled = MockOledDriver()
@@ -45,6 +47,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
 
     if not dry_run:
         try:
+            # モーターの左右差補正（任意）。存在しない場合は 0.0 として扱う。
             trim = _load_motor_trim(Path("configs/motor_config.json"))
             motor = PigpioMotorDriver(
                 PigpioMotorConfig(pin_l=config.gpio.pin_l, pin_r=config.gpio.pin_r, trim=trim)
@@ -59,6 +62,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
 
         if config.camera.enable and not no_camera:
             try:
+                # V4L2/OpenCV からフレームを取得し、JPEG バイト列として取り出す。
                 camera = OpenCVCameraDriver(
                     OpenCVCameraConfig(
                         device=config.camera.device, width=config.camera.width, height=config.camera.height
@@ -93,10 +97,12 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     def on_motor_cmd(data: dict) -> None:
         nonlocal last_motor_cmd_ms, motor_deadman_ms, motor_active
         try:
+            # motor/cmd（JSON）を解釈して左右速度（m/s）を適用する。
             cmd = MotorCmd.from_dict(data)
         except Exception as e:
             logger.warning("invalid motor cmd: %s", e)
             return
+        # deadman の ms は送信側から上書きできる（未指定なら config の値を維持）。
         motor_deadman_ms = int(cmd.deadman_ms or motor_deadman_ms)
         motor.set_velocity_mps(cmd.v_l, cmd.v_r)
         last_motor_cmd_ms = monotonic_ms()
@@ -107,12 +113,14 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     def on_oled_cmd(data: dict) -> None:
         nonlocal last_oled_update_ms
         try:
+            # oled/cmd（JSON）を解釈して表示文字列を更新する。
             cmd = OledCmd.from_dict(data)
         except Exception as e:
             logger.warning("invalid oled cmd: %s", e)
             return
         now = monotonic_ms()
         min_interval_ms = int(1000.0 / max(config.oled.max_hz, 1.0))
+        # OLED への更新頻度を上限で制限（画面更新の負荷/ちらつき抑制）。
         if now - last_oled_update_ms < min_interval_ms:
             return
         oled.show_text(cmd.text)
@@ -124,6 +132,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     ]
 
     def imu_loop() -> None:
+        # IMU を一定周期で読み取り、imu/state に JSON を publish する。
         sleeper = PeriodicSleeper(config.imu.publish_hz)
         key = keys.imu_state(robot_id)
         while not stop_event.is_set():
@@ -137,6 +146,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     camera_thread: Optional[threading.Thread] = None
     if config.camera.enable and not no_camera:
         def camera_loop() -> None:
+            # カメラ画像（JPEG バイト列）を一定 FPS で publish する。
             sleeper = PeriodicSleeper(config.camera.fps)
             key_img = keys.camera_image_jpeg(robot_id)
             key_meta = keys.camera_meta(robot_id)
@@ -145,7 +155,9 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
                 frame = camera.read_jpeg()
                 if frame:
                     jpeg, w, h = frame
+                    # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
                     session.publish(key_img, jpeg)
+                    # 画像メタ情報（サイズ/FPS/連番/時刻）を `camera/meta` に JSON で publish。
                     publish_json(
                         session,
                         key_meta,
@@ -162,6 +174,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     try:
         while not stop_event.is_set():
             now = monotonic_ms()
+            # deadman: 指令が途絶したら一定時間後に停止させる（安全対策）。
             if motor_active and last_motor_cmd_ms is not None and (now - last_motor_cmd_ms) > motor_deadman_ms:
                 logger.warning("deadman timeout -> motor stop")
                 motor.stop()
