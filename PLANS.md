@@ -133,3 +133,383 @@ Be prescriptive. Name the libraries, modules, and services to use and why. Speci
 
 Update Note: <What changed and why.>
 ```
+
+## ExecPlan: Split LiDAR example and driver (YDLidar)
+
+```md
+# Split LiDAR example and driver (YDLidar)
+
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
+
+## Purpose / Big Picture
+
+`src/dmc_ai_mobility/drivers/lidar.py` was previously a standalone script that directly initialized and read a YDLidar device. This change separates concerns:
+
+- Provide a proper LiDAR driver module under `src/dmc_ai_mobility/drivers/lidar.py` with a stable, testable interface and safe resource cleanup.
+- Provide a runnable example under `examples/` (renamed from the current script) that demonstrates how to read scans and compute a simple “front distance” metric.
+
+After this change, contributors can:
+
+- Run the LiDAR example on a Raspberry Pi connected to a supported YDLidar unit.
+- Run a no-hardware validation path (mock mode) from the repo root to confirm imports, CLI behavior, and basic processing logic.
+
+## Progress
+
+- [x] (2025-12-30) Move/rename the current LiDAR script into `examples/` (`examples/example_lidar_front_distance.py`).
+- [x] (2025-12-30) Implement `src/dmc_ai_mobility/drivers/lidar.py` as a driver (config, init, read, close).
+- [x] (2025-12-30) Update the example to use the new driver API and add a mock/no-hardware path.
+- [x] (2025-12-30) Add lightweight validation (compile/import checks and a mock run transcript).
+- [ ] (2025-12-30) Update docs/references that mention LiDAR (only if we introduce any).
+
+## Surprises & Discoveries
+
+- Observation: The original LiDAR example lived under `src/dmc_ai_mobility/drivers/` and used a `sys.path` hack.
+  Evidence: Previous contents of `src/dmc_ai_mobility/drivers/lidar.py` (now moved to `examples/example_lidar_front_distance.py`) included `sys.path.append(...)`.
+- Observation: The repository already vendors a SWIG wrapper and extension: `src/dmc_ai_mobility/drivers/ydlidar.py` and `src/dmc_ai_mobility/drivers/_ydlidar.so`.
+  Evidence: `rg -n "drivers/ydlidar.py|_ydlidar.so"`.
+- Observation: Mock mode needs synthetic points (not an empty scan) to demonstrate “Front:” output.
+  Evidence: Updated `MockLidarDriver` returns deterministic points near 0 degrees.
+
+## Decision Log
+
+- Decision: The example will import the driver (`dmc_ai_mobility.drivers.lidar`) rather than importing `ydlidar` directly.
+  Rationale: Keeps examples stable even if the underlying SDK import path changes; concentrates error handling in the driver.
+  Date/Author: 2025-12-30 / Codex
+
+- Decision: The driver will attempt to import the vendored wrapper (`dmc_ai_mobility.drivers.ydlidar`) and will raise a clear `RuntimeError` if the native extension is unavailable.
+  Rationale: Avoid ambiguity between a globally installed `ydlidar` package vs the vendored SWIG wrapper; provides a single supported import surface.
+  Date/Author: 2025-12-30 / Codex
+
+- Decision: Provide a `MockLidarDriver` that returns an empty scan (or deterministic synthetic points) so the example can run without hardware.
+  Rationale: Matches repository expectations that hardware-facing changes include a no-hardware validation path.
+  Date/Author: 2025-12-30 / Codex
+
+## Outcomes & Retrospective
+
+At completion:
+
+- `examples/` contains a runnable LiDAR example that demonstrates device I/O and “front distance” computation.
+- `src/dmc_ai_mobility/drivers/lidar.py` is a reusable driver with explicit configuration and safe lifecycle management.
+- A no-hardware path exists and is documented (mock mode).
+
+## Context and Orientation
+
+Relevant repository concepts and files:
+
+- The runtime target is Raspberry Pi OS (Linux) with Python 3.x, as described in `docs/dmc_ai_mobility_software_design.md`.
+- Drivers live in `src/dmc_ai_mobility/drivers/` and are used by higher-level nodes (for example `src/dmc_ai_mobility/app/robot_node.py`).
+- LiDAR example: `examples/example_lidar_front_distance.py` (demonstration script; runnable with `--mock`).
+- Vendored YDLidar Python wrapper: `src/dmc_ai_mobility/drivers/ydlidar.py` and native extension `src/dmc_ai_mobility/drivers/_ydlidar.so`.
+
+Terminology:
+
+- “LiDAR”: a distance sensor that produces a 2D scan (angle + range points).
+- “Scan”: one acquisition cycle from the LiDAR containing many points.
+- “Front distance”: for this example, the average (or minimum) range within a small angular window around 0 degrees.
+
+## Plan of Work
+
+1. Create the example file in `examples/` by moving the original script:
+
+   - Move `src/dmc_ai_mobility/drivers/lidar.py` to `examples/example_lidar_front_distance.py` (or similar).
+   - Remove the `sys.path.append(...)` hack.
+   - Convert to a small CLI with arguments (port, baudrate, angular window, mock mode).
+   - Update imports to use the new driver module.
+
+2. Implement the LiDAR driver in `src/dmc_ai_mobility/drivers/lidar.py`:
+
+   - Define a `LidarDriver` `Protocol` with `read()` and `close()`.
+   - Define `YdLidarConfig` as a `@dataclass(frozen=True)` with fields at least:
+     - `serial_port: str` (default `/dev/ttyAMA0`)
+     - `serial_baudrate: int` (default `230400`)
+     - `scan_frequency_hz: float` (default `7.0`)
+     - `min_angle_deg: float`, `max_angle_deg: float` (defaults `-180.0` to `180.0`)
+     - `min_range_m: float`, `max_range_m: float` (defaults `0.1` to `16.0`)
+     - Other fields from the current script if required by the device (sample rate, single channel, intensity).
+   - Define a `LidarPoint` and `LidarScan` dataclass (or simple typed structures) so callers do not need to touch SWIG types.
+   - Implement `YdLidarDriver`:
+     - On init: call `ydlidar.os_init()`, create `CYdLidar`, apply options, initialize, and `turnOn()`.
+     - On `read()`: call `doProcessSimple()` into an internal `LaserScan`, then convert `scan.points` into Python-native points.
+     - On failures: return `None` or an empty scan and throttle warnings (similar to `camera_v4l2.py`).
+     - On `close()`: call `turnOff()` and `disconnecting()` safely (idempotent).
+   - Implement `MockLidarDriver` with deterministic output (empty scan or fixed pattern).
+
+3. Update documentation:
+
+   - Update `docs/calibration.md` only if the example introduces any new configuration files (avoid if not needed).
+   - Optionally add a brief LiDAR mention to `README.md` if we want a discoverable “how to run example” entry.
+
+## Concrete Steps
+
+From the repository root:
+
+1. Create/move example:
+
+   - `git mv src/dmc_ai_mobility/drivers/lidar.py examples/example_lidar_front_distance.py`
+
+2. Create the new driver module:
+
+   - Create `src/dmc_ai_mobility/drivers/lidar.py` with the driver API described above.
+
+3. Validate in no-hardware mode:
+
+   - `PYTHONPATH=src python3 -m compileall -q src/dmc_ai_mobility examples`
+   - `PYTHONPATH=src python3 examples/example_lidar_front_distance.py --mock`
+
+   Expected output example (mock):
+     LiDAR Running (mock)
+     Front: ... m (Samples: ...)
+
+4. Validate on hardware (Raspberry Pi + LiDAR connected):
+
+   - `PYTHONPATH=src python3 examples/example_lidar_front_distance.py --port /dev/ttyAMA0 --baud 230400`
+
+   Expected output example (hardware):
+     LiDAR Running! (Press Ctrl+C to stop)
+     Front: 0.532 m (Samples: 14)
+
+## Validation and Acceptance
+
+Acceptance criteria:
+
+- Running the example in mock mode works on any machine (no `ydlidar` dependency required) and prints periodic “Front:” lines.
+- Running the example on Raspberry Pi with a connected LiDAR produces periodic “Front:” lines without crashing.
+- The new driver exposes a minimal, stable API (`YdLidarDriver.read()` and `.close()`) and does not require `sys.path` hacks.
+- Closing the driver is safe to call multiple times and does not leave the LiDAR running.
+
+## Idempotence and Recovery
+
+- Moving files is safe to re-run if done with `git mv`; if a move is wrong, revert with `git checkout -- <path>` or move back.
+- If LiDAR initialization fails on hardware, the example should exit with a non-zero status and a clear message indicating missing device, permissions, or SDK.
+- Mock mode always remains available as the fallback validation path.
+
+## Artifacts and Notes
+
+Keep one short transcript for:
+
+- Mock run on a dev machine.
+- Hardware run on a Raspberry Pi (including the port used and at least one “Front:” line).
+
+Mock run transcript (dev machine):
+
+  PYTHONPATH=src python3 -u examples/example_lidar_front_distance.py --mock --hz 5
+  LiDAR Running (mock) (Press Ctrl+C to stop)
+  Front(mean): 0.600 m  (Samples: 1)
+
+## Interfaces and Dependencies
+
+Dependencies:
+
+- YDLidar SDK Python bindings, via the vendored wrapper `src/dmc_ai_mobility/drivers/ydlidar.py` and native extension `src/dmc_ai_mobility/drivers/_ydlidar.so`.
+- No additional third-party libraries are required for the mock mode.
+
+Interfaces to implement:
+
+- `class LidarDriver(Protocol):`
+  - `def read(self) -> LidarScan | None: ...`
+  - `def close(self) -> None: ...`
+- `@dataclass(frozen=True) class YdLidarConfig: ...`
+- `class YdLidarDriver(LidarDriver): ...`
+- `class MockLidarDriver(LidarDriver): ...`
+
+Update Note: Initial ExecPlan added to `PLANS.md` to cover splitting the existing LiDAR script into an example and implementing a reusable driver.
+Update Note: Implemented the move to `examples/`, added `src/dmc_ai_mobility/drivers/lidar.py` driver API with `YdLidarDriver`/`MockLidarDriver`, and validated mock execution.
+Update Note: Refreshed plan wording (past tense / current file locations) so the ExecPlan remains accurate after implementation.
+```
+
+## ExecPlan: Add optional LiDAR support to robot node
+
+```md
+# Add optional LiDAR support to robot node
+
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
+
+## Purpose / Big Picture
+
+Add LiDAR support to the integrated robot node (`src/dmc_ai_mobility/app/robot_node.py`) so the robot can publish LiDAR data over Zenoh, while keeping LiDAR optional and controllable via `config.toml`.
+
+After this change:
+
+- If `[lidar].enable = true`, the robot node starts a LiDAR loop thread and publishes LiDAR data.
+- If `[lidar].enable = false` (default), LiDAR is not initialized and no LiDAR threads are created.
+- A no-hardware validation path exists (dry-run / mock driver) so contributors can verify behavior without a connected LiDAR.
+
+## Progress
+
+- [x] (2025-12-30) Add `[lidar]` section to `config.toml` and parse it in `src/dmc_ai_mobility/core/config.py`.
+- [x] (2025-12-30) Add Zenoh keys for LiDAR in `src/dmc_ai_mobility/zenoh/keys.py` and document payload shape.
+- [x] (2025-12-30) Update `src/dmc_ai_mobility/app/robot_node.py` to initialize LiDAR driver conditionally and publish in a loop thread.
+- [x] (2025-12-30) Add no-hardware validation path (mock LiDAR in dry-run when `[lidar].enable=true`).
+- [x] (2025-12-30) Update README/docs and `doc/keys_and_payloads.md` with how to enable LiDAR and what topics are published.
+
+## Surprises & Discoveries
+
+- Observation: `robot_node.py` already uses per-device threads (IMU loop and camera loop) and publishes JSON/bytes via Zenoh helpers.
+  Evidence: `src/dmc_ai_mobility/app/robot_node.py` has `imu_loop()` + `camera_loop()` and uses `publish_json(...)` / `session.publish(...)`.
+- Observation: A LiDAR driver module now exists at `src/dmc_ai_mobility/drivers/lidar.py` with both `YdLidarDriver` and `MockLidarDriver`.
+  Evidence: `src/dmc_ai_mobility/drivers/lidar.py`.
+
+## Decision Log
+
+- Decision: LiDAR enable/disable is controlled by `[lidar].enable` in `config.toml` and defaults to disabled.
+  Rationale: Keeps existing deployments unchanged and prevents accidental serial device access.
+  Date/Author: 2025-12-30 / Codex
+
+- Decision: Publish two Zenoh keys for LiDAR:
+  - `dmc_robo/<robot_id>/lidar/scan` (Publish, JSON)
+  - `dmc_robo/<robot_id>/lidar/front` (Publish, JSON; small summary used by downstream behaviors)
+  Rationale: Full scan is useful for mapping/visualization, while `front` stays lightweight for control and monitoring.
+  Date/Author: 2025-12-30 / Codex
+
+- Decision: In `dry_run`, LiDAR uses `MockLidarDriver` automatically when `[lidar].enable = true`.
+  Rationale: Provides a no-hardware path consistent with other components.
+  Date/Author: 2025-12-30 / Codex
+
+## Outcomes & Retrospective
+
+At completion:
+
+- LiDAR publishing is integrated into robot node without impacting non-LiDAR users.
+- LiDAR keys and payload schemas are defined and documented.
+- Mock mode enables validation on a laptop/workstation.
+
+## Context and Orientation
+
+Key files to modify:
+
+- `config.toml`: Add a `[lidar]` section (enable + serial params + publish rate).
+- `src/dmc_ai_mobility/core/config.py`: Extend `RobotConfig` to include `lidar` settings parsed from TOML.
+- `src/dmc_ai_mobility/zenoh/keys.py`: Add key functions for LiDAR topics.
+- `src/dmc_ai_mobility/app/robot_node.py`: Initialize LiDAR conditionally and publish in a periodic loop thread.
+- `src/dmc_ai_mobility/drivers/lidar.py`: Driver API already exists; robot node should use it (no direct SDK access).
+
+Terminology:
+
+- “Zenoh key”: A string topic like `dmc_robo/<robot_id>/camera/image/jpeg` used for publish/subscribe.
+- “Scan JSON”: A JSON payload for one LiDAR scan (many points).
+- “Front JSON”: A JSON payload summarizing distance near 0 degrees (small, stable schema).
+
+## Plan of Work
+
+1. Configuration (`config.toml` + parser):
+
+   - Add `[lidar]` section to `config.toml` with defaults:
+     - `enable = false`
+     - `port = "/dev/ttyAMA0"`
+     - `baudrate = 230400`
+     - `publish_hz = 10.0`
+     - `front_window_deg = 10.0`
+     - `front_stat = "mean"` (or `"min"`)
+   - Update `src/dmc_ai_mobility/core/config.py` to parse those fields into a new `LidarConfig` dataclass under `RobotConfig`.
+
+2. Zenoh keys:
+
+   - Update `src/dmc_ai_mobility/zenoh/keys.py`:
+     - `def lidar_scan(robot_id: str) -> str: return f"dmc_robo/<robot_id>/lidar/scan"`
+     - `def lidar_front(robot_id: str) -> str: return f"dmc_robo/<robot_id>/lidar/front"`
+
+3. Robot node integration:
+
+   - In `src/dmc_ai_mobility/app/robot_node.py`:
+     - Create `lidar = MockLidarDriver()` by default.
+     - If not `dry_run` and `config.lidar.enable`:
+       - Initialize `YdLidarDriver(YdLidarConfig(serial_port=..., serial_baudrate=...))`.
+       - If init fails, log and keep LiDAR disabled (no thread).
+     - Start a `lidar_loop()` thread only when enabled:
+       - Use `PeriodicSleeper(config.lidar.publish_hz)`.
+       - Call `lidar.read()` and if a scan exists:
+         - Publish full scan JSON to `keys.lidar_scan(robot_id)` using `publish_json(...)`.
+         - Compute front window metric and publish to `keys.lidar_front(robot_id)` using `publish_json(...)`.
+       - Include `seq` and `ts_ms` fields for ordering and timing.
+     - Ensure shutdown path closes lidar and joins thread (mirroring camera cleanup patterns).
+
+4. Payload schemas (define explicitly):
+
+   - `lidar/scan` (JSON):
+     - `{"seq": <int>, "ts_ms": <int>, "points": [{"angle_rad": <float>, "range_m": <float>, "intensity": <float|null>}, ...]}`
+   - `lidar/front` (JSON):
+     - `{"seq": <int>, "ts_ms": <int>, "window_deg": <float>, "stat": "mean"|"min", "distance_m": <float>, "samples": <int>}`
+
+5. Docs:
+
+   - Update `README.md` to describe `[lidar]` config and Zenoh keys (and mention mock/dry-run behavior).
+   - Update `doc/keys_and_payloads.md` to include the new LiDAR keys and payload schemas.
+
+## Concrete Steps
+
+From the repository root:
+
+1. Update configuration:
+
+   - Edit `config.toml` to include a `[lidar]` section with defaults.
+   - Edit `src/dmc_ai_mobility/core/config.py` to parse it into `RobotConfig`.
+
+2. Update keys:
+
+   - Edit `src/dmc_ai_mobility/zenoh/keys.py` to add `lidar_scan()` and `lidar_front()`.
+
+3. Implement node integration:
+
+   - Edit `src/dmc_ai_mobility/app/robot_node.py` to conditionally start the LiDAR thread and publish.
+
+4. Validate without hardware:
+
+   - `PYTHONPATH=src python3 -m compileall -q src/dmc_ai_mobility examples`
+   - `PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli robot --config ./config.toml --dry-run --robot-id devbot`
+
+   Expected log/output characteristics (example; exact formatting may differ):
+     robot node started (robot_id=devbot)
+     ... published dmc_robo/devbot/lidar/front ...
+
+5. Validate on hardware:
+
+   - Enable LiDAR in `config.toml` and run:
+     `./scripts/run_robot.sh`
+
+   Expected behavior:
+     - LiDAR thread starts, and Zenoh publishes on `dmc_robo/<robot_id>/lidar/scan` and `.../lidar/front`.
+
+## Validation and Acceptance
+
+Acceptance criteria:
+
+- With `[lidar].enable=false`, robot node starts and runs with no LiDAR initialization attempt and no LiDAR thread.
+- With `[lidar].enable=true` + `--dry-run`, robot node publishes mock LiDAR data (at least `lidar/front`) without hardware.
+- With `[lidar].enable=true` on hardware, robot node publishes LiDAR data without crashing and cleans up on shutdown.
+- Added Zenoh keys follow the naming convention `dmc_robo/<robot_id>/<component>/<direction>`.
+
+## Idempotence and Recovery
+
+- Re-running the robot node repeatedly should not require manual LiDAR reset; `close()` must be safe and best-effort.
+- If LiDAR init fails (missing device/permissions), robot node should continue running with LiDAR disabled and a warning log.
+- Config defaults keep LiDAR disabled to avoid unintended access to `/dev/tty*`.
+
+## Artifacts and Notes
+
+Keep short transcripts for:
+
+- Dry-run with LiDAR enabled (mock publishing).
+- Hardware run showing at least one published LiDAR message.
+
+## Interfaces and Dependencies
+
+Driver dependency:
+
+- Use `src/dmc_ai_mobility/drivers/lidar.py` only (do not import the SDK directly in `robot_node.py`).
+
+Public interfaces introduced/updated:
+
+- `src/dmc_ai_mobility/core/config.py`:
+  - `@dataclass(frozen=True) class LidarConfig: ...`
+  - `RobotConfig.lidar: LidarConfig`
+- `src/dmc_ai_mobility/zenoh/keys.py`:
+  - `lidar_scan(robot_id: str) -> str`
+  - `lidar_front(robot_id: str) -> str`
+
+Update Note: Initial ExecPlan added to `PLANS.md` for optional LiDAR support in `robot_node.py` controlled via `config.toml`.
+Update Note: Implemented optional LiDAR support end-to-end (config parsing, keys, robot node publish loop, and docs updates).
+```

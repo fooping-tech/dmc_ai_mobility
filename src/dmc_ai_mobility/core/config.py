@@ -47,6 +47,16 @@ class CameraConfig:
 
 
 @dataclass(frozen=True)
+class LidarConfig:
+    enable: bool = False
+    port: str = "/dev/ttyAMA0"
+    baudrate: int = 230400
+    publish_hz: float = 10.0
+    front_window_deg: float = 10.0
+    front_stat: str = "mean"  # "mean" or "min"
+
+
+@dataclass(frozen=True)
 class ZenohConfig:
     config_path: Optional[str] = None
 
@@ -59,6 +69,7 @@ class RobotConfig:
     imu: ImuConfig = ImuConfig()
     oled: OledConfig = OledConfig()
     camera: CameraConfig = CameraConfig()
+    lidar: LidarConfig = LidarConfig()
     zenoh: ZenohConfig = ZenohConfig()
 
 
@@ -83,6 +94,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
     imu = _get_section(raw, "imu")
     oled = _get_section(raw, "oled")
     camera = _get_section(raw, "camera")
+    lidar = _get_section(raw, "lidar")
     zenoh = _get_section(raw, "zenoh")
 
     return RobotConfig(
@@ -108,6 +120,14 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             width=int(camera.get("width", CameraConfig.width)),
             height=int(camera.get("height", CameraConfig.height)),
             fps=float(camera.get("fps", CameraConfig.fps)),
+        ),
+        lidar=LidarConfig(
+            enable=bool(lidar.get("enable", LidarConfig.enable)),
+            port=str(lidar.get("port", LidarConfig.port)),
+            baudrate=int(lidar.get("baudrate", LidarConfig.baudrate)),
+            publish_hz=float(lidar.get("publish_hz", LidarConfig.publish_hz)),
+            front_window_deg=float(lidar.get("front_window_deg", LidarConfig.front_window_deg)),
+            front_stat=str(lidar.get("front_stat", LidarConfig.front_stat)),
         ),
         zenoh=ZenohConfig(config_path=zenoh.get("config_path")),
     )

@@ -55,6 +55,7 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 - `[imu].publish_hz`: IMU publish 周期（Hz）
 - `[oled].max_hz`: OLED 更新上限（Hz）
 - `[camera]`: カメラ設定（enable/device/width/height/fps）
+- `[lidar]`: LiDAR 設定（enable/port/baudrate/publish_hz/front_window_deg/front_stat）
 - `[zenoh].config_path`: Zenoh 設定ファイルへのパス（任意）
 
 ## Zenoh キー
@@ -70,6 +71,8 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 - oled cmd（Subscribe）: `dmc_robo/<robot_id>/oled/cmd`
 - camera jpeg（Publish）: `dmc_robo/<robot_id>/camera/image/jpeg`
 - camera meta（Publish）: `dmc_robo/<robot_id>/camera/meta`
+- lidar scan（Publish）: `dmc_robo/<robot_id>/lidar/scan`
+- lidar front（Publish）: `dmc_robo/<robot_id>/lidar/front`
 
 motor cmd payload（JSON）例:
 

@@ -110,6 +110,56 @@ JSON schema:
 - `seq` (int): 連番
 - `ts_ms` (int): 送信側タイムスタンプ（epoch ms）
 
+### lidar
+
+- Publish (scan JSON): `dmc_robo/<robot_id>/lidar/scan`
+- Publish (front JSON): `dmc_robo/<robot_id>/lidar/front`
+- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `lidar_scan()` / `lidar_front()`
+- payload: JSON（UTF-8 bytes）
+
+#### lidar/scan
+
+JSON schema:
+
+    {
+      "seq": 0,
+      "ts_ms": 1735467890123,
+      "points": [
+        {"angle_rad": 0.0, "range_m": 0.60, "intensity": null}
+      ]
+    }
+
+フィールド:
+- `seq` (int): 連番
+- `ts_ms` (int): 取得時刻（epoch ms）
+- `points` (array): 点群配列
+  - `angle_rad` (number): 角度（rad）
+  - `range_m` (number): 距離（m）
+  - `intensity` (number|null, optional): 強度（対応する LiDAR のみ）
+
+#### lidar/front
+
+正面方向（0度付近）の距離を軽量に使えるようにまとめたサマリです。
+
+JSON schema:
+
+    {
+      "seq": 0,
+      "ts_ms": 1735467890123,
+      "window_deg": 10.0,
+      "stat": "mean",
+      "distance_m": 0.60,
+      "samples": 1
+    }
+
+フィールド:
+- `seq` (int): 連番
+- `ts_ms` (int): 取得時刻（epoch ms）
+- `window_deg` (number): 正面とみなす角度範囲（度）。`± window_deg/2` を使用します。
+- `stat` (string): 集計方法（`"mean"` または `"min"`）
+- `distance_m` (number): 集計距離（m）
+- `samples` (int): 集計に使った点数
+
 ### health（参考）
 
 - Publish: `dmc_robo/<robot_id>/health/state`

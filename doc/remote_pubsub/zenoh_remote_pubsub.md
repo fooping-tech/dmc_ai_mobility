@@ -17,6 +17,7 @@
 最小操作スクリプト:
 
 - `examples/remote_zenoh_tool.py`（このリポジトリに同梱）
+  - `motor/stop/oled/imu/camera/lidar` のサブコマンドを提供します
 
 ## ネットワーク構成（おすすめ）
 
@@ -225,6 +226,26 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
     sub_meta.undeclare()
     s.close()
     PY
+
+## 5) lidar を Subscribe（角度ごとの生値 / 正面サマリ）
+
+ロボットが publish しているキー:
+
+- scan（角度ごとの生値）: `dmc_robo/<robot_id>/lidar/scan`
+- front（正面サマリ）: `dmc_robo/<robot_id>/lidar/front`
+
+payload の詳細は `doc/keys_and_payloads.md` の `### lidar` を参照してください。
+
+実行例:
+
+    # (デフォルト) lidar/front を subscribe して JSON を表示
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 lidar
+
+    # lidar/scan の JSON をそのまま表示（点群配列が大きいので注意）
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 lidar --scan --print-json
+
+    # lidar/scan を角度(deg)/距離(m)として表示（先頭 N 点のみ）
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 lidar --scan --print-points --max-points 200
 
 ## トラブルシュート
 

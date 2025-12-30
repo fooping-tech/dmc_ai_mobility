@@ -29,3 +29,11 @@ def camera_meta(robot_id: str) -> str:
 
 def health_state(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/health/state"
+
+
+def lidar_scan(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/lidar/scan"
+
+
+def lidar_front(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/lidar/front"

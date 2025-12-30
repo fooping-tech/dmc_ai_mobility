@@ -26,6 +26,15 @@ width = 320
 height = 240
 fps = 10
 
+[lidar]
+# Optional: LiDAR support (disabled by default)
+enable = true
+port = "/dev/ttyAMA0"
+baudrate = 230400
+publish_hz = 10
+front_window_deg = 10
+front_stat = "mean"  # "mean" or "min"
+
 [zenoh]
 # Optional: path to a zenoh config file (json5).
 # config_path = "configs/zenoh.json5"

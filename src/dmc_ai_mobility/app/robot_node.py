@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 from pathlib import Path
 from typing import Optional
@@ -11,6 +12,7 @@ from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_cloc
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd
 from dmc_ai_mobility.drivers.camera_v4l2 import MockCameraDriver, OpenCVCameraConfig, OpenCVCameraDriver
 from dmc_ai_mobility.drivers.imu import MockImuDriver, Mpu9250ImuDriver, MpuImuConfig
+from dmc_ai_mobility.drivers.lidar import MockLidarDriver, YdLidarConfig, YdLidarDriver
 from dmc_ai_mobility.drivers.motor import MockMotorDriver, PigpioMotorConfig, PigpioMotorDriver
 from dmc_ai_mobility.drivers.oled import MockOledDriver, Ssd1306OledConfig, Ssd1306OledDriver
 from dmc_ai_mobility.zenoh import keys
@@ -30,6 +32,26 @@ def _load_motor_trim(path: Path) -> float:
         return 0.0
 
 
+def _lidar_front_distance(points: list[dict], *, window_deg: float, stat: str) -> Optional[tuple[float, int]]:
+    half = max(float(window_deg), 0.0) / 2.0
+    dists: list[float] = []
+    for p in points:
+        try:
+            angle_rad = float(p.get("angle_rad"))
+            dist = float(p.get("range_m"))
+        except Exception:
+            continue
+        if dist <= 0.0:
+            continue
+        if abs(math.degrees(angle_rad)) <= half:
+            dists.append(dist)
+    if not dists:
+        return None
+    if str(stat).lower() == "min":
+        return (min(dists), len(dists))
+    return (sum(dists) / len(dists), len(dists))
+
+
 def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     robot_id = config.robot_id
 
@@ -44,6 +66,8 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
     imu = MockImuDriver()
     oled = MockOledDriver()
     camera = MockCameraDriver()
+    lidar = MockLidarDriver()
+    lidar_enabled = bool(config.lidar.enable)
 
     if not dry_run:
         try:
@@ -83,6 +107,18 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
             )
         except Exception as e:
             logger.warning("oled driver unavailable; using mock (%s)", e)
+
+        if lidar_enabled:
+            try:
+                lidar = YdLidarDriver(
+                    YdLidarConfig(
+                        serial_port=config.lidar.port,
+                        serial_baudrate=config.lidar.baudrate,
+                    )
+                )
+            except Exception as e:
+                logger.warning("lidar driver unavailable; disabling lidar (%s)", e)
+                lidar_enabled = False
 
     stop_event = threading.Event()
 
@@ -169,6 +205,50 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
         camera_thread = threading.Thread(target=camera_loop, name="camera_loop", daemon=True)
         camera_thread.start()
 
+    lidar_thread: Optional[threading.Thread] = None
+    if lidar_enabled:
+        def lidar_loop() -> None:
+            sleeper = PeriodicSleeper(config.lidar.publish_hz)
+            key_scan = keys.lidar_scan(robot_id)
+            key_front = keys.lidar_front(robot_id)
+            seq = 0
+            while not stop_event.is_set():
+                scan = lidar.read()
+                if scan is not None:
+                    points = [
+                        {"angle_rad": p.angle_rad, "range_m": p.range_m, "intensity": p.intensity}
+                        for p in scan.points
+                    ]
+                    publish_json(
+                        session,
+                        key_scan,
+                        {"seq": seq, "ts_ms": scan.ts_ms, "points": points},
+                    )
+                    front = _lidar_front_distance(
+                        points,
+                        window_deg=config.lidar.front_window_deg,
+                        stat=config.lidar.front_stat,
+                    )
+                    if front is not None:
+                        distance_m, samples = front
+                        publish_json(
+                            session,
+                            key_front,
+                            {
+                                "seq": seq,
+                                "ts_ms": scan.ts_ms,
+                                "window_deg": config.lidar.front_window_deg,
+                                "stat": config.lidar.front_stat,
+                                "distance_m": distance_m,
+                                "samples": samples,
+                            },
+                        )
+                    seq += 1
+                sleeper.sleep()
+
+        lidar_thread = threading.Thread(target=lidar_loop, name="lidar_loop", daemon=True)
+        lidar_thread.start()
+
     logger.info("robot node started (robot_id=%s)", robot_id)
 
     try:
@@ -208,6 +288,10 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
             except Exception:
                 pass
             try:
+                lidar.close()
+            except Exception:
+                pass
+            try:
                 oled.close()
             except Exception:
                 pass
@@ -220,5 +304,7 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool) -> int:
         imu_thread.join(timeout=1.0)
     if camera_thread and camera_thread.is_alive():
         camera_thread.join(timeout=1.0)
+    if lidar_thread and lidar_thread.is_alive():
+        lidar_thread.join(timeout=1.0)
 
     return 0
