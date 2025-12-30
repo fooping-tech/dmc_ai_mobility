@@ -74,10 +74,10 @@ payload（JSON）例:
 - `unit`: `"mps"`（本リポジトリの実装は unit は現状ログ用途で、速度解釈はドライバ依存です）
 - `deadman_ms`: 途絶時に停止するまでの猶予（ms）
 
-実行例（`robot_id=rasp-zero-01`）:
+	実行例（`robot_id=rasp-zero-01`）:
 
-    # (推奨) 付属の最小ツール
-    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 motor --v-l 0.10 --v-r 0.10 --duration-s 2
+	    # (推奨) 付属の最小ツール
+	    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 motor --v-l 1.0 --v-r 1.0 --duration-s 1
 
     python3 - <<'PY'
     import json, time
