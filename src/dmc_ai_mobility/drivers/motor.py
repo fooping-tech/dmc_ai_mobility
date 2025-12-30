@@ -6,6 +6,17 @@ from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
+_PIGPIO_SERVO_MIN_PW = 500
+_PIGPIO_SERVO_MAX_PW = 2500
+
+
+def _clamp_int(value: int, lo: int, hi: int) -> int:
+    if value < lo:
+        return lo
+    if value > hi:
+        return hi
+    return value
+
 
 class MotorDriver(Protocol):
     def set_velocity_mps(self, v_l: float, v_r: float) -> None: ...
@@ -51,6 +62,7 @@ class PigpioMotorDriver:
         if not self._pi.connected:  # pragma: no cover
             raise RuntimeError("pigpio daemon is not running or not reachable")
         self._cfg = config
+        self._last_clamp_warn_ms = 0.0
 
     def set_velocity_mps(self, v_l: float, v_r: float) -> None:
         # Hardware mapping is project-specific; this provides a safe, simple placeholder:
@@ -62,8 +74,22 @@ class PigpioMotorDriver:
             v_l_adj = v_l * (1.0 - self._cfg.trim)
             v_r_adj = v_r * (1.0 + self._cfg.trim)
 
-        pw_l = int(self._cfg.neutral_pw + v_l_adj * self._cfg.gain_pw_per_unit)
-        pw_r = int(self._cfg.neutral_pw - v_r_adj * self._cfg.gain_pw_per_unit)
+        pw_l_raw = int(self._cfg.neutral_pw + v_l_adj * self._cfg.gain_pw_per_unit)
+        pw_r_raw = int(self._cfg.neutral_pw - v_r_adj * self._cfg.gain_pw_per_unit)
+        pw_l = _clamp_int(pw_l_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
+        pw_r = _clamp_int(pw_r_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
+        if (pw_l != pw_l_raw) or (pw_r != pw_r_raw):
+            now_ms = self._pigpio.time_time() * 1000.0
+            if now_ms - self._last_clamp_warn_ms > 5000.0:
+                logger.warning(
+                    "motor pulsewidth clamped (pw_l=%d->%d pw_r=%d->%d). "
+                    "Check motor cmd magnitude and configs/motor_config.json trim.",
+                    pw_l_raw,
+                    pw_l,
+                    pw_r_raw,
+                    pw_r,
+                )
+                self._last_clamp_warn_ms = now_ms
         self._pi.set_servo_pulsewidth(self._cfg.pin_l, pw_l)
         self._pi.set_servo_pulsewidth(self._cfg.pin_r, pw_r)
 
