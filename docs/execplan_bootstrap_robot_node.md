@@ -2,7 +2,7 @@
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `dmc_ai_mobility_software_design.md`.
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
 
 ## Purpose / Big Picture
 
@@ -43,7 +43,7 @@ At completion, the repo provides a runnable baseline service and a dry-run accep
 
 This repository targets a Raspberry Pi OS runtime (Python 3.x) and uses Zenoh pub/sub for robot I/O.
 
-Key concepts from `dmc_ai_mobility_software_design.md`:
+Key concepts from `docs/dmc_ai_mobility_software_design.md`:
 
 - Zenoh keys use the convention `dmc_robo/<robot_id>/<component>/<direction>`.
 - Motor commands are subscribed from `dmc_robo/<robot_id>/motor/cmd` with a JSON payload containing `v_l`, `v_r`, `unit`, `deadman_ms`, `seq`, `ts_ms`.

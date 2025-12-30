@@ -4,7 +4,7 @@ This file defines how to write and maintain an ExecPlan for this repository. An 
 
 Use an ExecPlan whenever the work is a complex feature, a system change, or a significant refactor. For small edits, a full plan is optional.
 
-Before writing any ExecPlan, read `dmc_ai_mobility_software_design.md` and include all relevant details in the plan itself. Do not point to external docs. If the design doc does not cover a needed detail, the plan must resolve the ambiguity and record the choice.
+Before writing any ExecPlan, read `docs/dmc_ai_mobility_software_design.md` and include all relevant details in the plan itself. Do not point to external docs. If the design doc does not cover a needed detail, the plan must resolve the ambiguity and record the choice.
 
 ## Non-negotiable requirements
 
@@ -26,7 +26,7 @@ Use proper Markdown headings. Use two newlines after every heading. Use ordered 
 
 ## Project-specific expectations
 
-ExecPlans for this repository must incorporate the system design described in `dmc_ai_mobility_software_design.md`, including:
+ExecPlans for this repository must incorporate the system design described in `docs/dmc_ai_mobility_software_design.md`, including:
 
 The runtime environment (Raspberry Pi OS, Python 3.x, systemd), the Zenoh pub/sub model, and the robot components (motor, IMU, OLED, camera).
 
@@ -70,7 +70,7 @@ Whenever you revise an ExecPlan, append a short note at the bottom describing wh
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `dmc_ai_mobility_software_design.md`.
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
 
 ## Purpose / Big Picture
 

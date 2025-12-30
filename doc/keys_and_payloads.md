@@ -1,6 +1,6 @@
 # Zenoh Keys and Payloads
 
-このドキュメントは `dmc_ai_mobility_software_design.md` と現在の実装（`src/dmc_ai_mobility/zenoh/keys.py` / `src/dmc_ai_mobility/core/types.py`）に基づき、Zenoh のキーと payload（JSON/bytes）を整理したものです。
+このドキュメントは `docs/dmc_ai_mobility_software_design.md` と現在の実装（`src/dmc_ai_mobility/zenoh/keys.py` / `src/dmc_ai_mobility/core/types.py`）に基づき、Zenoh のキーと payload（JSON/bytes）を整理したものです。
 
 ## 命名規則
 
