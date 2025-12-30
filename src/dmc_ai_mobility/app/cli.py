@@ -23,6 +23,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Log every received motor/oled command (can be very noisy at high Hz).",
     )
+    robot.add_argument(
+        "--print-motor-pw",
+        action="store_true",
+        help="Print pigpio pulsewidths (pw_l/pw_r) to stdout for debugging (very noisy).",
+    )
     robot.add_argument("--log-level", type=str, default=None)
 
     health = sub.add_parser("health", help="Run health/heartbeat publisher")
@@ -49,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=bool(args.dry_run),
             no_camera=bool(args.no_camera),
             log_all_cmd=bool(args.log_all_cmd),
+            print_motor_pw=bool(args.print_motor_pw),
         )
 
     if args.cmd == "health":

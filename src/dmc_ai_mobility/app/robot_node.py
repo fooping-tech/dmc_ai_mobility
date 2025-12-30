@@ -52,7 +52,14 @@ def _lidar_front_distance(points: list[dict], *, window_deg: float, stat: str) -
     return (sum(dists) / len(dists), len(dists))
 
 
-def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool, log_all_cmd: bool = False) -> int:
+def run_robot(
+    config: RobotConfig,
+    *,
+    dry_run: bool,
+    no_camera: bool,
+    log_all_cmd: bool = False,
+    print_motor_pw: bool = False,
+) -> int:
     robot_id = config.robot_id
 
     zenoh_cfg = ZenohOpenOptions(
@@ -74,7 +81,12 @@ def run_robot(config: RobotConfig, *, dry_run: bool, no_camera: bool, log_all_cm
             # モーターの左右差補正（任意）。存在しない場合は 0.0 として扱う。
             trim = _load_motor_trim(Path("configs/motor_config.json"))
             motor = PigpioMotorDriver(
-                PigpioMotorConfig(pin_l=config.gpio.pin_l, pin_r=config.gpio.pin_r, trim=trim)
+                PigpioMotorConfig(
+                    pin_l=config.gpio.pin_l,
+                    pin_r=config.gpio.pin_r,
+                    trim=trim,
+                    print_pulsewidth=print_motor_pw,
+                )
             )
         except Exception as e:
             logger.warning("motor driver unavailable; using mock (%s)", e)

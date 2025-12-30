@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -48,6 +49,7 @@ class PigpioMotorConfig:
     trim: float = 0.0
     neutral_pw: int = 1500
     gain_pw_per_unit: float = 500.0
+    print_pulsewidth: bool = False
 
 
 class PigpioMotorDriver:
@@ -79,7 +81,7 @@ class PigpioMotorDriver:
         pw_l = _clamp_int(pw_l_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
         pw_r = _clamp_int(pw_r_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
         if (pw_l != pw_l_raw) or (pw_r != pw_r_raw):
-            now_ms = self._pigpio.time_time() * 1000.0
+            now_ms = time.monotonic() * 1000.0
             if now_ms - self._last_clamp_warn_ms > 5000.0:
                 logger.warning(
                     "motor pulsewidth clamped (pw_l=%d->%d pw_r=%d->%d). "
@@ -92,10 +94,21 @@ class PigpioMotorDriver:
                 self._last_clamp_warn_ms = now_ms
         self._pi.set_servo_pulsewidth(self._cfg.pin_l, pw_l)
         self._pi.set_servo_pulsewidth(self._cfg.pin_r, pw_r)
+        if self._cfg.print_pulsewidth:
+            print(
+                f"motor pw: pin_l={self._cfg.pin_l} pw_l={pw_l} (raw={pw_l_raw}) | "
+                f"pin_r={self._cfg.pin_r} pw_r={pw_r} (raw={pw_r_raw})",
+                flush=True,
+            )
 
     def stop(self) -> None:
         self._pi.set_servo_pulsewidth(self._cfg.pin_l, 0)
         self._pi.set_servo_pulsewidth(self._cfg.pin_r, 0)
+        if self._cfg.print_pulsewidth:
+            print(
+                f"motor pw: pin_l={self._cfg.pin_l} pw_l=0 | pin_r={self._cfg.pin_r} pw_r=0",
+                flush=True,
+            )
 
     def close(self) -> None:
         try:
