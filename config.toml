@@ -25,8 +25,8 @@ height = 32
 [camera]
 enable = true
 device = 0
-width = 320
-height = 240
+width = 640
+height = 480
 fps = 10
 
 [lidar]
