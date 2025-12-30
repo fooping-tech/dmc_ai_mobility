@@ -49,6 +49,7 @@ class PigpioMotorConfig:
     trim: float = 0.0
     neutral_pw: int = 1500
     gain_pw_per_unit: float = 500.0
+    deadband_pw: int = 0
     print_pulsewidth: bool = False
 
 
@@ -80,6 +81,14 @@ class PigpioMotorDriver:
         pw_r_raw = int(self._cfg.neutral_pw - v_r_adj * self._cfg.gain_pw_per_unit)
         pw_l = _clamp_int(pw_l_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
         pw_r = _clamp_int(pw_r_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
+
+        deadband_pw = int(self._cfg.deadband_pw)
+        if deadband_pw > 0:
+            n = int(self._cfg.neutral_pw)
+            if abs(pw_l - n) <= deadband_pw and abs(pw_r - n) <= deadband_pw:
+                pw_l = 0
+                pw_r = 0
+
         if (pw_l != pw_l_raw) or (pw_r != pw_r_raw):
             now_ms = time.monotonic() * 1000.0
             if now_ms - self._last_clamp_warn_ms > 5000.0:

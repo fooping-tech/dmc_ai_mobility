@@ -21,6 +21,7 @@ class GpioConfig:
 @dataclass(frozen=True)
 class MotorConfig:
     deadman_ms: int = 300
+    deadband_pw: int = 0
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,10 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             sw1=int(gpio.get("sw1", GpioConfig.sw1)),
             sw2=int(gpio.get("sw2", GpioConfig.sw2)),
         ),
-        motor=MotorConfig(deadman_ms=int(motor.get("deadman_ms", MotorConfig.deadman_ms))),
+        motor=MotorConfig(
+            deadman_ms=int(motor.get("deadman_ms", MotorConfig.deadman_ms)),
+            deadband_pw=int(motor.get("deadband_pw", MotorConfig.deadband_pw)),
+        ),
         imu=ImuConfig(publish_hz=float(imu.get("publish_hz", ImuConfig.publish_hz))),
         oled=OledConfig(
             max_hz=float(oled.get("max_hz", OledConfig.max_hz)),

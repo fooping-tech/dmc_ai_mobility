@@ -52,6 +52,7 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 
 - `robot_id`: Zenoh キーに含まれるロボット識別子
 - `[motor].deadman_ms`: 指令が途絶したら停止するまでの ms
+- `[motor].deadband_pw`: デッドバンド（パルス幅 1500±x）。両輪が範囲内なら停止（pulsewidth=0）
 - `[imu].publish_hz`: IMU publish 周期（Hz）
 - `[oled].max_hz`: OLED 更新上限（Hz）
 - `[camera]`: カメラ設定（enable/device/width/height/fps）

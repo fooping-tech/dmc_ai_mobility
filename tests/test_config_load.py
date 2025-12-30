@@ -17,6 +17,7 @@ class TestConfigLoad(unittest.TestCase):
             cfg = load_config(Path(td) / "missing.toml")
             self.assertEqual(cfg.robot_id, "rasp-zero-01")
             self.assertEqual(cfg.motor.deadman_ms, 300)
+            self.assertEqual(cfg.motor.deadband_pw, 0)
             self.assertEqual(cfg.imu.publish_hz, 50.0)
 
     def test_load_from_file_and_overrides(self) -> None:
@@ -29,6 +30,7 @@ class TestConfigLoad(unittest.TestCase):
                         "",
                         "[motor]",
                         "deadman_ms = 123",
+                        "deadband_pw = 25",
                         "",
                         "[imu]",
                         "publish_hz = 20",
@@ -40,6 +42,7 @@ class TestConfigLoad(unittest.TestCase):
             cfg = load_config(path, overrides={"robot_id": "bot-b"})
             self.assertEqual(cfg.robot_id, "bot-b")
             self.assertEqual(cfg.motor.deadman_ms, 123)
+            self.assertEqual(cfg.motor.deadband_pw, 25)
             self.assertEqual(cfg.imu.publish_hz, 20.0)
 
 

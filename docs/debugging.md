@@ -29,6 +29,13 @@
 
     PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli robot --config ./config.toml --print-motor-pw
 
+### デッドバンド（微小指令の抑制）
+
+`config.toml` の `[motor].deadband_pw` を 0 より大きくすると、両輪のパルス幅が `1500±deadband_pw` に入ったときに左右とも停止扱い（pulsewidth=0）になります。
+
+    [motor]
+    deadband_pw = 30
+
 ## LiDAR を有効化して publish する（robot node）
 
 LiDAR は `config.toml` の `[lidar]` で有効/無効を切り替えます（既定は無効）。
@@ -49,4 +56,3 @@ publish 先キーと payload は `doc/keys_and_payloads.md` の `### lidar` を�
 
     # LiDAR: 角度ごとの生値（点群）を表示
     python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 lidar --scan --print-points --max-points 200
-

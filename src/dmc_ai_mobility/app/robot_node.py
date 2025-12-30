@@ -85,6 +85,7 @@ def run_robot(
                     pin_l=config.gpio.pin_l,
                     pin_r=config.gpio.pin_r,
                     trim=trim,
+                    deadband_pw=int(config.motor.deadband_pw),
                     print_pulsewidth=print_motor_pw,
                 )
             )
