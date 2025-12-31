@@ -56,7 +56,15 @@ OLED_CMD_SCHEMA = {
 
 IMU_STATE_SCHEMA = {
     "key": "dmc_robo/<robot_id>/imu/state",
-    "json": {"gx": "number", "gy": "number", "gz": "number", "ts_ms": "int"},
+    "json": {
+        "gx": "number",
+        "gy": "number",
+        "gz": "number",
+        "ax": "number",
+        "ay": "number",
+        "az": "number",
+        "ts_ms": "int",
+    },
 }
 
 

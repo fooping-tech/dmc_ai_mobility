@@ -237,7 +237,7 @@ def run_robot(
         motor_telemetry_thread.start()
 
     def imu_loop() -> None:
-        # IMU を一定周期で読み取り、imu/state に JSON を publish する。
+        # IMU（ジャイロ/加速度）を一定周期で読み取り、imu/state に JSON を publish する。
         sleeper = PeriodicSleeper(config.imu.publish_hz)
         key = keys.imu_state(robot_id)
         while not stop_event.is_set():

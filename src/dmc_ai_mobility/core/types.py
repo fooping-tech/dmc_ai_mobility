@@ -57,10 +57,21 @@ class ImuState:
     gx: float
     gy: float
     gz: float
+    ax: float
+    ay: float
+    az: float
     ts_ms: int
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"gx": self.gx, "gy": self.gy, "gz": self.gz, "ts_ms": self.ts_ms}
+        return {
+            "gx": self.gx,
+            "gy": self.gy,
+            "gz": self.gz,
+            "ax": self.ax,
+            "ay": self.ay,
+            "az": self.az,
+            "ts_ms": self.ts_ms,
+        }
 
 
 @dataclass(frozen=True)

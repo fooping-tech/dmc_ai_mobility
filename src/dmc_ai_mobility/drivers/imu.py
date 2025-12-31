@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Optional, Protocol
 
 from dmc_ai_mobility.core.timing import wall_clock_ms
 from dmc_ai_mobility.core.types import ImuState
@@ -12,18 +12,21 @@ from dmc_ai_mobility.core.types import ImuState
 logger = logging.getLogger(__name__)
 
 
-def _load_gyro_offsets(path: Path) -> tuple[float, float, float]:
+def _load_imu_offsets(path: Path) -> tuple[float, float, float, float, float, float]:
     try:
         if not path.exists():
-            return (0.0, 0.0, 0.0)
+            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         data = json.loads(path.read_text(encoding="utf-8"))
         return (
             float(data.get("gx_off") or 0.0),
             float(data.get("gy_off") or 0.0),
             float(data.get("gz_off") or 0.0),
+            float(data.get("ax_off") or 0.0),
+            float(data.get("ay_off") or 0.0),
+            float(data.get("az_off") or 0.0),
         )
     except Exception:
-        return (0.0, 0.0, 0.0)
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
 
 class ImuDriver(Protocol):
@@ -33,7 +36,7 @@ class ImuDriver(Protocol):
 
 class MockImuDriver:
     def read(self) -> ImuState:
-        return ImuState(gx=0.0, gy=0.0, gz=0.0, ts_ms=wall_clock_ms())
+        return ImuState(gx=0.0, gy=0.0, gz=0.0, ax=0.0, ay=0.0, az=0.0, ts_ms=wall_clock_ms())
 
     def close(self) -> None:
         return
@@ -71,14 +74,29 @@ class Mpu9250ImuDriver:
         except OSError:  # pragma: no cover
             logger.warning("IMU magnetometer init failed; continuing with gyro only")
 
-        self._gx_off, self._gy_off, self._gz_off = _load_gyro_offsets(Path("configs/imu_config.json"))
+        self._gx_off, self._gy_off, self._gz_off, self._ax_off, self._ay_off, self._az_off = _load_imu_offsets(
+            Path("configs/imu_config.json")
+        )
+        self._accel_reader: Optional[Callable[[], tuple[float, float, float]]] = None
+        if hasattr(self._mpu, "readAccelerometerMaster"):
+            self._accel_reader = self._mpu.readAccelerometerMaster
+        elif hasattr(self._mpu, "readAccelerometer"):
+            self._accel_reader = self._mpu.readAccelerometer
+        else:
+            logger.warning("IMU accelerometer read is not available in this driver")
 
     def read(self) -> ImuState:
         gx, gy, gz = self._mpu.readGyroscopeMaster()
+        ax = ay = az = 0.0
+        if self._accel_reader is not None:
+            ax, ay, az = self._accel_reader()
         return ImuState(
             gx=float(gx) - self._gx_off,
             gy=float(gy) - self._gy_off,
             gz=float(gz) - self._gz_off,
+            ax=float(ax) - self._ax_off,
+            ay=float(ay) - self._ay_off,
+            az=float(az) - self._az_off,
             ts_ms=wall_clock_ms(),
         )
 
