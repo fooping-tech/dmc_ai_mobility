@@ -22,6 +22,7 @@ class GpioConfig:
 class MotorConfig:
     deadman_ms: int = 300
     deadband_pw: int = 0
+    telemetry_hz: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
         motor=MotorConfig(
             deadman_ms=int(motor.get("deadman_ms", MotorConfig.deadman_ms)),
             deadband_pw=int(motor.get("deadband_pw", MotorConfig.deadband_pw)),
+            telemetry_hz=float(motor.get("telemetry_hz", MotorConfig.telemetry_hz)),
         ),
         imu=ImuConfig(publish_hz=float(imu.get("publish_hz", ImuConfig.publish_hz))),
         oled=OledConfig(

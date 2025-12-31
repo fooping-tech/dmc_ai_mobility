@@ -101,6 +101,10 @@ dmc_robo/<robot_id>/<component>/<direction>
 }
 ```
 
+#### モータテレメトリ（Publish）
+
+- Key: `dmc_robo/<robot_id>/motor/telemetry`
+
 #### IMU 状態（Publish）
 
 - Key: `dmc_robo/<robot_id>/imu/state`
@@ -130,6 +134,7 @@ dmc_robo/<robot_id>/<component>/<direction>
 
 - Zenoh セッション管理
 - motor / oled Subscribe
+- motor telemetry Publish
 - imu / camera Publish
 - deadman による安全停止
 - camera 障害の局所化
@@ -141,6 +146,7 @@ dmc_robo/<robot_id>/<component>/<direction>
 | 機能 | 周期 |
 |----|----|
 | Motor | イベント駆動 |
+| Motor telemetry | 10Hz（設定可） |
 | IMU | 50Hz |
 | OLED | 最大10Hz |
 | Camera | 5–10Hz |
@@ -154,6 +160,7 @@ robot_id = "rasp-zero-01"
 
 [motor]
 deadman_ms = 300
+telemetry_hz = 10
 
 [imu]
 publish_hz = 50

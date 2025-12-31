@@ -3,6 +3,7 @@
 Raspberry Pi OS 上で動作する **AI ロボット制御用 Python ソフトウェア**です。通信基盤に Zenoh を使い、以下を行います。
 
 - motor: 速度指令を Subscribe して走行制御（deadman で安全停止）
+- motor telemetry: 現在のパルス幅と最新指令を Publish
 - imu: IMU 状態を Publish
 - oled: 表示コマンドを Subscribe
 - camera: JPEG とメタデータを Publish（任意）
@@ -53,6 +54,7 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 - `robot_id`: Zenoh キーに含まれるロボット識別子
 - `[motor].deadman_ms`: 指令が途絶したら停止するまでの ms
 - `[motor].deadband_pw`: デッドバンド（パルス幅 1500±x）。両輪が範囲内なら停止（pulsewidth=0）
+- `[motor].telemetry_hz`: motor テレメトリ publish 周期（Hz）
 - `[imu].publish_hz`: IMU publish 周期（Hz）
 - `[oled].max_hz`: OLED 更新上限（Hz）
 - `[camera]`: カメラ設定（enable/device/width/height/fps）
@@ -68,6 +70,7 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 主なキー（詳細は `src/dmc_ai_mobility/zenoh/keys.py`）:
 
 - motor cmd（Subscribe）: `dmc_robo/<robot_id>/motor/cmd`
+- motor telemetry（Publish）: `dmc_robo/<robot_id>/motor/telemetry`
 - imu state（Publish）: `dmc_robo/<robot_id>/imu/state`
 - oled cmd（Subscribe）: `dmc_robo/<robot_id>/oled/cmd`
 - camera jpeg（Publish）: `dmc_robo/<robot_id>/camera/image/jpeg`

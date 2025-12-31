@@ -11,6 +11,10 @@ def motor_cmd(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/motor/cmd"
 
 
+def motor_telemetry(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/motor/telemetry"
+
+
 def imu_state(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/imu/state"
 

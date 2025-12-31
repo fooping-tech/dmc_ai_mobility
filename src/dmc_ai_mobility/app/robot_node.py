@@ -69,7 +69,18 @@ def run_robot(
     session = open_session(dry_run=dry_run, options=zenoh_cfg)
 
     # デフォルトは mock ドライバ（dry_run や初期化失敗時でもプロセスを起動できるようにする）。
-    motor = MockMotorDriver()
+    trim = 0.0
+    if not dry_run:
+        # モーターの左右差補正（任意）。存在しない場合は 0.0 として扱う。
+        trim = _load_motor_trim(Path("configs/motor_config.json"))
+    motor_cfg = PigpioMotorConfig(
+        pin_l=config.gpio.pin_l,
+        pin_r=config.gpio.pin_r,
+        trim=trim,
+        deadband_pw=int(config.motor.deadband_pw),
+        print_pulsewidth=print_motor_pw,
+    )
+    motor = MockMotorDriver(motor_cfg)
     imu = MockImuDriver()
     oled = MockOledDriver()
     camera = MockCameraDriver()
@@ -78,17 +89,7 @@ def run_robot(
 
     if not dry_run:
         try:
-            # モーターの左右差補正（任意）。存在しない場合は 0.0 として扱う。
-            trim = _load_motor_trim(Path("configs/motor_config.json"))
-            motor = PigpioMotorDriver(
-                PigpioMotorConfig(
-                    pin_l=config.gpio.pin_l,
-                    pin_r=config.gpio.pin_r,
-                    trim=trim,
-                    deadband_pw=int(config.motor.deadband_pw),
-                    print_pulsewidth=print_motor_pw,
-                )
-            )
+            motor = PigpioMotorDriver(motor_cfg)
         except Exception as e:
             logger.warning("motor driver unavailable; using mock (%s)", e)
 
@@ -135,6 +136,7 @@ def run_robot(
 
     stop_event = threading.Event()
 
+    last_motor_cmd: Optional[MotorCmd] = None
     last_motor_cmd_ms: Optional[int] = None
     motor_deadman_ms = int(config.motor.deadman_ms)
     motor_active = False
@@ -145,7 +147,7 @@ def run_robot(
         motor_active = True
 
     def on_motor_cmd(data: dict) -> None:
-        nonlocal last_motor_cmd_ms, motor_deadman_ms, motor_active, last_motor_log_ms
+        nonlocal last_motor_cmd, last_motor_cmd_ms, motor_deadman_ms, motor_active, last_motor_log_ms
         try:
             # motor/cmd（JSON）を解釈して左右速度（m/s）を適用する。
             cmd = MotorCmd.from_dict(data)
@@ -171,6 +173,7 @@ def run_robot(
         # deadman の ms は送信側から上書きできる（未指定なら config の値を維持）。
         motor_deadman_ms = int(cmd.deadman_ms or motor_deadman_ms)
         motor.set_velocity_mps(cmd.v_l, cmd.v_r)
+        last_motor_cmd = cmd
         last_motor_cmd_ms = monotonic_ms()
         motor_active = True
 
@@ -200,6 +203,38 @@ def run_robot(
         subscribe_json(session, keys.motor_cmd(robot_id), on_motor_cmd),
         subscribe_json(session, keys.oled_cmd(robot_id), on_oled_cmd),
     ]
+
+    motor_telemetry_thread: Optional[threading.Thread] = None
+    motor_telemetry_hz = float(config.motor.telemetry_hz)
+    if motor_telemetry_hz > 0.0:
+        def motor_telemetry_loop() -> None:
+            sleeper = PeriodicSleeper(motor_telemetry_hz)
+            key = keys.motor_telemetry(robot_id)
+            while not stop_event.is_set():
+                pulsewidth = motor.get_last_pulsewidths()
+                cmd = last_motor_cmd
+                payload = {
+                    "pw_l": pulsewidth.pw_l,
+                    "pw_r": pulsewidth.pw_r,
+                    "pw_l_raw": pulsewidth.pw_l_raw,
+                    "pw_r_raw": pulsewidth.pw_r_raw,
+                    "ts_ms": wall_clock_ms(),
+                    "cmd_v_l": cmd.v_l if cmd else None,
+                    "cmd_v_r": cmd.v_r if cmd else None,
+                    "cmd_unit": cmd.unit if cmd else None,
+                    "cmd_deadman_ms": cmd.deadman_ms if cmd else None,
+                    "cmd_seq": cmd.seq if cmd else None,
+                    "cmd_ts_ms": cmd.ts_ms if cmd else None,
+                }
+                publish_json(session, key, payload)
+                sleeper.sleep()
+
+        motor_telemetry_thread = threading.Thread(
+            target=motor_telemetry_loop,
+            name="motor_telemetry_loop",
+            daemon=True,
+        )
+        motor_telemetry_thread.start()
 
     def imu_loop() -> None:
         # IMU を一定周期で読み取り、imu/state に JSON を publish する。
@@ -336,6 +371,8 @@ def run_robot(
 
     if imu_thread.is_alive():
         imu_thread.join(timeout=1.0)
+    if motor_telemetry_thread and motor_telemetry_thread.is_alive():
+        motor_telemetry_thread.join(timeout=1.0)
     if camera_thread and camera_thread.is_alive():
         camera_thread.join(timeout=1.0)
     if lidar_thread and lidar_thread.is_alive():
