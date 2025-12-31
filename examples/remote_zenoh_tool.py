@@ -146,6 +146,25 @@ def cmd_imu(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_motor_telemetry(args: argparse.Namespace) -> int:
+    key = _key(args.robot_id, "motor/telemetry")
+    session = args.open_session()
+
+    def on_sample(sample: Any) -> None:
+        try:
+            print(json.dumps(_decode_json_payload(sample), ensure_ascii=False))
+        except Exception as e:
+            print(f"decode failed: {e}")
+
+    sub = session.declare_subscriber(key, on_sample)
+    try:
+        input("subscribing motor telemetry... press Enter to quit\n")
+    finally:
+        sub.undeclare()
+        session.close()
+    return 0
+
+
 def cmd_camera(args: argparse.Namespace) -> int:
     key_img = _key(args.robot_id, "camera/image/jpeg")
     key_meta = _key(args.robot_id, "camera/meta")
@@ -303,6 +322,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     imu = sub.add_parser("imu", help="Subscribe imu/state and print JSON")
     imu.set_defaults(func=cmd_imu)
+
+    motor_telemetry = sub.add_parser("motor-telemetry", help="Subscribe motor/telemetry and print JSON")
+    motor_telemetry.set_defaults(func=cmd_motor_telemetry)
 
     cam = sub.add_parser("camera", help="Subscribe camera jpeg/meta and save JPEGs")
     cam.add_argument("--out-dir", type=Path, default=Path("./camera_frames"))
