@@ -19,6 +19,7 @@ class TestConfigLoad(unittest.TestCase):
             self.assertEqual(cfg.motor.deadman_ms, 300)
             self.assertEqual(cfg.motor.deadband_pw, 0)
             self.assertEqual(cfg.imu.publish_hz, 50.0)
+            self.assertEqual(cfg.oled.override_s, 2.0)
 
     def test_load_from_file_and_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as td:

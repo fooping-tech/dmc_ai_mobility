@@ -53,6 +53,11 @@ OLED_CMD_SCHEMA = {
     "json": {"text": "string", "ts_ms": "int (optional)"},
 }
 
+OLED_IMAGE_MONO1_SCHEMA = {
+    "key": "dmc_robo/<robot_id>/oled/image/mono1",
+    "bytes": "SSD1306 mono1 buffer (len = width*height/8, using config [oled].width/[oled].height)",
+}
+
 
 IMU_STATE_SCHEMA = {
     "key": "dmc_robo/<robot_id>/imu/state",

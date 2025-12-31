@@ -103,7 +103,8 @@ JSON schema:
 ### oled
 
 - Subscribe: `dmc_robo/<robot_id>/oled/cmd`
-- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `oled_cmd()`
+- Subscribe (bytes): `dmc_robo/<robot_id>/oled/image/mono1`
+- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `oled_cmd()` / `oled_image_mono1()`
 - payload: JSON（UTF-8 bytes）
 
 JSON schema:
@@ -119,6 +120,15 @@ JSON schema:
 
 備考:
 - ノード側は `config.toml` の `[oled].max_hz` により更新頻度を上限付きで間引きます。
+- ノード側は `config.toml` の `[oled].override_s` により、Zenoh 経由で受信した表示内容を一定時間だけ表示してから通常表示へ戻します。
+
+#### oled/image/mono1
+
+- payload: 生 bytes（SSD1306 の mono1 バッファ）
+- サイズ: `width * height / 8` bytes（`config.toml` の `[oled].width`/`[oled].height` に一致する必要があります）
+
+備考:
+- 表示は一時的（`[oled].override_s` 秒）で、時間経過後は通常表示（起動時/モータ作動時の画像）に戻ります。
 
 ### camera
 

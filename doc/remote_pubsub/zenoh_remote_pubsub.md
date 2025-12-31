@@ -183,6 +183,23 @@ payload（JSON）例:
     s.close()
     PY
 
+## 3b) oled 画像（mono1 bytes）を Publish（一定時間だけ表示）
+
+ロボットが subscribe しているキー:
+- `dmc_robo/<robot_id>/oled/image/mono1`
+
+この payload は SSD1306 の mono1 バッファ（生 bytes）です。サイズは `width * height / 8` bytes で、ロボット側の `config.toml` の `[oled].width`/`[oled].height` に一致する必要があります。
+
+実行例（入力画像を変換して送信）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 oled-image \
+      --image ./docs/assets/logo.png --width 128 --height 32
+
+実行例（事前に生成した .bin を送信）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 oled-image \
+      --bin ./assets/oled/boot.bin --width 128 --height 32
+
 ## 4) camera を Subscribe（JPEG と meta）
 
 ロボットが publish しているキー:

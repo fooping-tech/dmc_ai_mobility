@@ -23,6 +23,10 @@ def oled_cmd(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/oled/cmd"
 
 
+def oled_image_mono1(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/oled/image/mono1"
+
+
 def camera_image_jpeg(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/camera/image/jpeg"
 

@@ -122,6 +122,62 @@ def cmd_oled(args: argparse.Namespace) -> int:
     return 0
 
 
+def _mono1_buf_len(width: int, height: int) -> int:
+    if width <= 0 or height <= 0 or (height % 8) != 0:
+        raise SystemExit("width/height must be > 0 and height must be a multiple of 8")
+    return (width * height) // 8
+
+
+def _image_path_to_mono1(path: Path, *, width: int, height: int, invert: bool) -> bytes:
+    try:
+        from PIL import Image, ImageOps  # type: ignore
+    except Exception as e:
+        raise SystemExit("pillow is required for --image (pip install pillow)") from e
+
+    img = Image.open(path).convert("L")
+    if invert:
+        img = ImageOps.invert(img)
+    img = img.resize((int(width), int(height)), Image.Resampling.LANCZOS)
+    img = img.convert("1")
+
+    expected = _mono1_buf_len(width, height)
+    buf = bytearray(expected)
+    px = img.load()
+    for y in range(height):
+        page = y // 8
+        bit = y % 8
+        base = page * width
+        for x in range(width):
+            if px[x, y]:
+                buf[base + x] |= 1 << bit
+    return bytes(buf)
+
+
+def cmd_oled_image_mono1(args: argparse.Namespace) -> int:
+    key = _key(args.robot_id, "oled/image/mono1")
+    session = args.open_session()
+    pub = session.declare_publisher(key)
+
+    width = int(args.width)
+    height = int(args.height)
+    expected = _mono1_buf_len(width, height)
+
+    if args.bin:
+        payload = Path(args.bin).read_bytes()
+    else:
+        payload = _image_path_to_mono1(Path(args.image), width=width, height=height, invert=bool(args.invert))
+
+    if len(payload) != expected:
+        raise SystemExit(f"invalid payload size: got={len(payload)} expected={expected} ({width}x{height})")
+
+    try:
+        pub.put(payload)
+        time.sleep(0.1)
+    finally:
+        session.close()
+    return 0
+
+
 def _decode_json_payload(sample: Any) -> Any:
     raw = sample.payload.to_bytes()
     return json.loads(raw.decode("utf-8"))
@@ -319,6 +375,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     oled = sub.add_parser("oled", help="Publish oled/cmd once")
     oled.add_argument("--text", type=str, required=True)
     oled.set_defaults(func=cmd_oled)
+
+    oled_img = sub.add_parser("oled-image", help="Publish oled/image/mono1 once (raw mono1 bytes)")
+    oled_img_src = oled_img.add_mutually_exclusive_group(required=True)
+    oled_img_src.add_argument("--bin", type=str, default=None, help="Path to a prebuilt mono1 .bin payload")
+    oled_img_src.add_argument("--image", type=str, default=None, help="Path to an input image (png/jpg/...)")
+    oled_img.add_argument("--width", type=int, default=128)
+    oled_img.add_argument("--height", type=int, default=32)
+    oled_img.add_argument("--invert", action="store_true", help="Invert input image before mono1 conversion")
+    oled_img.set_defaults(func=cmd_oled_image_mono1)
 
     imu = sub.add_parser("imu", help="Subscribe imu/state and print JSON")
     imu.set_defaults(func=cmd_imu)

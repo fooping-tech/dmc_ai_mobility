@@ -37,6 +37,9 @@ class OledConfig:
     i2c_address: int = 0x3C
     width: int = 128
     height: int = 32
+    override_s: float = 2.0
+    boot_image: Optional[str] = None
+    motor_image: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,13 @@ def _get_section(data: Dict[str, Any], key: str) -> Dict[str, Any]:
     return {}
 
 
+def _optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
 def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> RobotConfig:
     raw: Dict[str, Any] = {}
     if path.exists():
@@ -119,6 +129,9 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             i2c_address=int(oled.get("i2c_address", OledConfig.i2c_address)),
             width=int(oled.get("width", OledConfig.width)),
             height=int(oled.get("height", OledConfig.height)),
+            override_s=float(oled.get("override_s", OledConfig.override_s)),
+            boot_image=_optional_str(oled.get("boot_image")),
+            motor_image=_optional_str(oled.get("motor_image")),
         ),
         camera=CameraConfig(
             enable=bool(camera.get("enable", CameraConfig.enable)),

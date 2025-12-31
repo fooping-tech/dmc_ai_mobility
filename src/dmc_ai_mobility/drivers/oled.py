@@ -9,17 +9,26 @@ logger = logging.getLogger(__name__)
 
 class OledDriver(Protocol):
     def show_text(self, text: str) -> None: ...
+    def show_mono1(self, buf: bytes) -> None: ...
     def close(self) -> None: ...
 
 
 class MockOledDriver:
     def __init__(self) -> None:
         self._last = ""
+        self._last_mono1: bytes = b""
 
     def show_text(self, text: str) -> None:
         if text != self._last:
             logger.info("mock oled text=%r", text)
             self._last = text
+            self._last_mono1 = b""
+
+    def show_mono1(self, buf: bytes) -> None:
+        if buf != self._last_mono1:
+            logger.info("mock oled mono1 (%d bytes)", len(buf))
+            self._last_mono1 = bytes(buf)
+            self._last = ""
 
     def close(self) -> None:
         return
@@ -65,11 +74,14 @@ class Ssd1306OledDriver:
         except Exception:
             self._font = ImageFont.load_default()
         self._last = ""
+        self._last_mono1: bytes = b""
+        self._buf_len = (self._oled.width * self._oled.height) // 8
 
     def show_text(self, text: str) -> None:
         if text == self._last:
             return
         self._last = text
+        self._last_mono1 = b""
 
         self._draw.rectangle((0, 0, self._oled.width, self._oled.height), outline=0, fill=0)
         lines = (text or "").splitlines() or [""]
@@ -84,6 +96,32 @@ class Ssd1306OledDriver:
         self._oled.image(self._image)
         self._oled.show()
         logger.info("oled updated text=%r", text)
+
+    def show_mono1(self, buf: bytes) -> None:
+        if not isinstance(buf, (bytes, bytearray, memoryview)):
+            raise TypeError("buf must be bytes-like")
+        data = bytes(buf)
+        if len(data) != self._buf_len:
+            raise ValueError(f"invalid mono1 buffer length: got={len(data)} expected={self._buf_len}")
+        if data == self._last_mono1:
+            return
+        self._last_mono1 = data
+        self._last = ""
+
+        # Prefer direct buffer blit (fast path). Fall back to PIL image conversion if needed.
+        if hasattr(self._oled, "buffer"):
+            try:
+                self._oled.buffer[:] = data
+                self._oled.show()
+                return
+            except Exception:
+                pass
+
+        from dmc_ai_mobility.core.oled_bitmap import mono1_buffer_to_pil_image
+
+        img = mono1_buffer_to_pil_image(data, width=self._oled.width, height=self._oled.height)
+        self._oled.image(img)
+        self._oled.show()
 
     def close(self) -> None:
         try:

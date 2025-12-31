@@ -16,6 +16,7 @@ class TestZenohKeys(unittest.TestCase):
         self.assertEqual(keys.motor_cmd(robot_id), "dmc_robo/rasp-zero-01/motor/cmd")
         self.assertEqual(keys.imu_state(robot_id), "dmc_robo/rasp-zero-01/imu/state")
         self.assertEqual(keys.oled_cmd(robot_id), "dmc_robo/rasp-zero-01/oled/cmd")
+        self.assertEqual(keys.oled_image_mono1(robot_id), "dmc_robo/rasp-zero-01/oled/image/mono1")
         self.assertEqual(keys.camera_image_jpeg(robot_id), "dmc_robo/rasp-zero-01/camera/image/jpeg")
         self.assertEqual(keys.camera_meta(robot_id), "dmc_robo/rasp-zero-01/camera/meta")
 

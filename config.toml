@@ -22,6 +22,16 @@ i2c_port = 1
 i2c_address = 0x3C
 width = 128
 height = 32
+# How long (seconds) to temporarily display remote (Zenoh) OLED data,
+# then revert to the normal boot/motor display.
+override_s = 2.0
+#
+# Optional: normal display assets. Use either:
+# - a prebuilt `.bin` mono1 buffer (width*height/8 bytes), or
+# - an image file (png/jpg/...) that will be converted at startup.
+#
+boot_image = "assets/bin/boot.bin"
+# motor_image = "assets/oled/motor.bin"
 
 [camera]
 enable = true

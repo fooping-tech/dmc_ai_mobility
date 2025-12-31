@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from dmc_ai_mobility.core.config import RobotConfig
+from dmc_ai_mobility.core.oled_bitmap import load_oled_asset_mono1, mono1_buf_len
 from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd
 from dmc_ai_mobility.drivers.camera_v4l2 import MockCameraDriver, OpenCVCameraConfig, OpenCVCameraDriver
@@ -177,32 +178,134 @@ def run_robot(
         last_motor_cmd_ms = monotonic_ms()
         motor_active = True
 
-    last_oled_update_ms: int = 0
+    oled_override_lock = threading.Lock()
+    oled_override_until_ms: int = 0
+    oled_override_kind: Optional[str] = None  # "text" | "mono1"
+    oled_override_text: str = ""
+    oled_override_mono1: bytes = b""
+    oled_override_ms = int(max(float(config.oled.override_s), 0.0) * 1000.0)
 
     def on_oled_cmd(data: dict) -> None:
-        nonlocal last_oled_update_ms
+        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
         try:
-            # oled/cmd（JSON）を解釈して表示文字列を更新する。
             cmd = OledCmd.from_dict(data)
         except Exception as e:
             logger.warning("invalid oled cmd: %s", e)
             return
         if log_all_cmd:
             logger.info("oled cmd (recv): text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
-        now = monotonic_ms()
-        min_interval_ms = int(1000.0 / max(config.oled.max_hz, 1.0))
-        # OLED への更新頻度を上限で制限（画面更新の負荷/ちらつき抑制）。
-        if now - last_oled_update_ms < min_interval_ms:
+        with oled_override_lock:
+            oled_override_kind = "text"
+            oled_override_text = cmd.text
+            oled_override_mono1 = b""
+            oled_override_until_ms = monotonic_ms() + oled_override_ms
+
+    oled_width = int(config.oled.width)
+    oled_height = int(config.oled.height)
+    oled_expected_len = mono1_buf_len(oled_width, oled_height)
+
+    boot_mono1: Optional[bytes] = None
+    motor_mono1: Optional[bytes] = None
+    try:
+        boot_mono1 = load_oled_asset_mono1(config.oled.boot_image, width=oled_width, height=oled_height)
+    except Exception as e:
+        logger.warning("failed to load oled.boot_image (%s): %s", config.oled.boot_image, e)
+    try:
+        motor_mono1 = load_oled_asset_mono1(config.oled.motor_image, width=oled_width, height=oled_height)
+    except Exception as e:
+        logger.warning("failed to load oled.motor_image (%s): %s", config.oled.motor_image, e)
+
+    def on_oled_image_mono1(payload: bytes) -> None:
+        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        if log_all_cmd:
+            logger.info("oled image/mono1 (recv): %d bytes", len(payload))
+        if len(payload) != oled_expected_len:
+            logger.warning(
+                "invalid oled image/mono1 payload size: got=%d expected=%d (%sx%s)",
+                len(payload),
+                oled_expected_len,
+                oled_width,
+                oled_height,
+            )
             return
-        if not log_all_cmd:
-            logger.info("oled cmd: text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
-        oled.show_text(cmd.text)
-        last_oled_update_ms = now
+        with oled_override_lock:
+            oled_override_kind = "mono1"
+            oled_override_mono1 = bytes(payload)
+            oled_override_text = ""
+            oled_override_until_ms = monotonic_ms() + oled_override_ms
 
     subs = [
         subscribe_json(session, keys.motor_cmd(robot_id), on_motor_cmd),
         subscribe_json(session, keys.oled_cmd(robot_id), on_oled_cmd),
+        session.subscribe(keys.oled_image_mono1(robot_id), on_oled_image_mono1),
     ]
+
+    def oled_loop() -> None:
+        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        # OLED 表示は 1 つのループに集約し、優先順位で表示内容を決める。
+        # 1) Zenoh から来た override（text / mono1）を一定時間表示
+        # 2) 通常時は boot/motor 状態に応じた画像（無ければ簡易テキスト）
+        hz = max(float(config.oled.max_hz), 1.0)
+        sleeper = PeriodicSleeper(hz)
+        while not stop_event.is_set():
+            now = monotonic_ms()
+
+            # 1) override
+            kind: Optional[str]
+            text: str
+            mono1: bytes
+            until_ms: int
+            with oled_override_lock:
+                kind = oled_override_kind
+                text = oled_override_text
+                mono1 = oled_override_mono1
+                until_ms = oled_override_until_ms
+
+            if kind and now < until_ms:
+                try:
+                    if kind == "mono1":
+                        oled.show_mono1(mono1)
+                    else:
+                        oled.show_text(text)
+                except Exception as e:
+                    logger.warning("oled override render failed: %s", e)
+                sleeper.sleep()
+                continue
+
+            # Expire override state once time passes.
+            if kind and now >= until_ms:
+                with oled_override_lock:
+                    if oled_override_kind == kind and oled_override_until_ms == until_ms:
+                        oled_override_kind = None
+                        oled_override_text = ""
+                        oled_override_mono1 = b""
+                        oled_override_until_ms = 0
+
+            # 2) base state
+            cmd = last_motor_cmd
+            cmd_ms = last_motor_cmd_ms
+            deadman = int(motor_deadman_ms)
+            moving = bool(cmd and (abs(cmd.v_l) > 1e-3 or abs(cmd.v_r) > 1e-3))
+            fresh = bool(cmd_ms is not None and (now - int(cmd_ms)) <= deadman)
+
+            try:
+                if fresh and moving:
+                    if motor_mono1 is not None:
+                        oled.show_mono1(motor_mono1)
+                    else:
+                        oled.show_text(f"{robot_id}\nMOTOR")
+                else:
+                    if boot_mono1 is not None:
+                        oled.show_mono1(boot_mono1)
+                    else:
+                        oled.show_text(f"{robot_id}\nREADY")
+            except Exception as e:
+                logger.warning("oled base render failed: %s", e)
+
+            sleeper.sleep()
+
+    oled_thread = threading.Thread(target=oled_loop, name="oled_loop", daemon=True)
+    oled_thread.start()
 
     motor_telemetry_thread: Optional[threading.Thread] = None
     motor_telemetry_hz = float(config.motor.telemetry_hz)
@@ -373,6 +476,8 @@ def run_robot(
         imu_thread.join(timeout=1.0)
     if motor_telemetry_thread and motor_telemetry_thread.is_alive():
         motor_telemetry_thread.join(timeout=1.0)
+    if oled_thread.is_alive():
+        oled_thread.join(timeout=1.0)
     if camera_thread and camera_thread.is_alive():
         camera_thread.join(timeout=1.0)
     if lidar_thread and lidar_thread.is_alive():
