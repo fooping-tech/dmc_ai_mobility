@@ -21,6 +21,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+.serena/
 
 # Logs
 *.log
