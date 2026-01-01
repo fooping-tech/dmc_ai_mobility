@@ -1,5 +1,7 @@
 # dmc_ai_mobility
 
+![top](docs/assets/image.png)
+
 Raspberry Pi OS 上で動作する **AI ロボット制御用 Python ソフトウェア**です。通信基盤に Zenoh を使い、以下を行います。
 
 - motor: 速度指令を Subscribe して走行制御（deadman で安全停止）
