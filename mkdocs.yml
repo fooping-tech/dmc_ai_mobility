@@ -17,9 +17,25 @@ theme:
 plugins:
   - search
 
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
 nav:
   - Home: index.md
   - Design:
       - Software Design: dmc_ai_mobility_software_design.md
+      - Software Structure: software_structure.md
   - Setup:
       - Calibration: calibration.md
+      - Config Guide: config_guide.md
+  - Operations:
+      - Deployment: deployment.md
+      - Debugging: debugging.md
+      - Zenoh Operations: zenoh_operations.md
+  - Reference:
+      - Keys and Payloads: keys_and_payloads.md
+      - Zenoh Remote Pub/Sub: zenoh_remote_pubsub.md

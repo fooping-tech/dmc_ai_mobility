@@ -1,6 +1,6 @@
-# デバッグ用機能メモ
+# デバッグ診断
 
-このドキュメントは、開発・デバッグ時に役立つ「ログ出力／購読ツール」の使い方をまとめたものです。
+このドキュメントは、開発・デバッグ時に役立つ「ログ出力／購読ツール」と「よくある症状の対処」をまとめたものです。
 
 ## robot node: 受信コマンドをターミナルに表示
 
@@ -43,11 +43,11 @@ LiDAR は `config.toml` の `[lidar]` で有効/無効を切り替えます（�
     [lidar]
     enable = true
 
-publish 先キーと payload は `doc/keys_and_payloads.md` の `### lidar` を参照してください。
+publish 先キーと payload は `docs/keys_and_payloads.md` の `### lidar` を参照してください。
 
 ## 別PCから subscribe/publish（remote tool）
 
-`examples/remote_zenoh_tool.py` を使った手順は `doc/remote_pubsub/zenoh_remote_pubsub.md` を参照してください。
+`examples/remote_zenoh_tool.py` を使った手順は `docs/zenoh_remote_pubsub.md` を参照してください。
 
 例:
 
@@ -56,3 +56,23 @@ publish 先キーと payload は `doc/keys_and_payloads.md` の `### lidar` を�
 
     # LiDAR: 角度ごとの生値（点群）を表示
     python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 lidar --scan --print-points --max-points 200
+
+## よくある症状と対処
+
+### camera read failed が続く
+
+- `--no-camera` で一旦起動できるか確認
+- `/dev/video*` の存在・権限を確認
+- `libcamerify` が必要な環境では `scripts/run_robot.sh` を使う
+
+### OLED が表示されない
+
+- I2C アドレス（`[oled].i2c_address`）が正しいか確認
+- `boot_image`/`motor_image` のパスが存在するか確認
+- 画像サイズが `width*height/8` bytes に一致しているか確認
+
+### Zenoh に接続できない
+
+- `zenoh_remote.json5` の `connect/endpoints` を見直す
+- `--connect` オプションで一時的に接続先を上書きする
+- `--dry-run` でローカル起動だけでも動作するか確認

@@ -16,3 +16,12 @@ Zenoh を通信基盤とし、以下を扱います。
 ## 通信・API
 - [Zenoh Keys and Payloads](keys_and_payloads.md)
 - [Zenoh Remote Pub/Sub](zenoh_remote_pubsub.md)
+
+## 構成図
+- [ソフト構造](software_structure.md)
+
+## 運用・ガイド
+- [設定ガイド](config_guide.md)
+- [デプロイ手順](deployment.md)
+- [デバッグ診断](debugging.md)
+- [Zenoh 運用](zenoh_operations.md)
