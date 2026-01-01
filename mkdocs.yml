@@ -1,0 +1,25 @@
+site_name: dmc_ai_mobility
+site_description: AIロボット制御ソフト（Zenohベース）
+repo_name: fooping-tech/dmc_ai_mobility
+repo_url: https://github.com/fooping-tech/dmc_ai_mobility
+edit_uri: edit/main/docs/
+site_url: https://fooping-tech.github.io/dmc_ai_mobility/
+
+theme:
+  name: material
+  language: ja
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - content.action.edit
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Design:
+      - Software Design: dmc_ai_mobility_software_design.md
+  - Setup:
+      - Calibration: calibration.md
