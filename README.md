@@ -10,6 +10,7 @@ Raspberry Pi OS 上で動作する **AI ロボット制御用 Python ソフト�
 
 設計の概要は `docs/dmc_ai_mobility_software_design.md` を参照してください。
 キャリブレーション手順は `docs/calibration.md` を参照してください。
+ドキュメントサイト: https://fooping-tech.github.io/dmc_ai_mobility/
 
 ## Quickstart（ハード無し / Zenoh 無し）
 
