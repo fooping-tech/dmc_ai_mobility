@@ -20,6 +20,13 @@ Zenoh を通信基盤とし、以下を扱います。
 ## 構成図
 - [ソフト構造](software_structure.md)
 
+## リポジトリ
+- [GitHub: fooping-tech/dmc_ai_mobility](https://github.com/fooping-tech/dmc_ai_mobility)
+
+## 関連リポジトリ
+- [dmc_ai_host](https://github.com/fooping-tech/dmc_ai_host): Zenoh 経由の遠隔操作 UI/最小ツール。キーボード操作、IMUチャート、カメラ表示、LiDAR 2D 表示、OLED テキスト送信を提供。
+- [lerobot_dmc](https://github.com/fooping-tech/lerobot_dmc): LeRobot 連携用プラグイン（dmc_robo 対応）。teleop/record から Zenoh 経由でロボット I/O を扱える。
+
 ## 運用・ガイド
 - [設定ガイド](config_guide.md)
 - [デプロイ手順](deployment.md)
