@@ -246,7 +246,7 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
 
 ## 4b) camera レイテンシ計測（グラフ表示）
 
-`camera/meta` の `capture_ts_ms` と受信時刻から end-to-end レイテンシを計測します。  
+`camera/meta` の `publish_ts_ms` と受信時刻から publish→受信レイテンシを計測します。  
 `--plot` または `--plot-out` を使う場合は `matplotlib` が必要です（`pip install matplotlib`）。
 
 計測の意味（camera-latency の表示項目。グラフは read_ms + pipeline_ms + publish_to_remote_ms を積み上げ表示）:

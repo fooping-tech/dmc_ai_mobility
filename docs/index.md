@@ -36,6 +36,6 @@ Zenoh を通信基盤とし、以下を扱います。
 - [デバッグ診断](debugging.md)
 - [Zenoh 運用](zenoh_operations.md)
 
-camera/meta には capture 開始/終了や read_ms などレイテンシ計測用の追加フィールドが含まれ、`examples/remote_zenoh_tool.py camera-latency` でグラフ出力できます。`config.toml` の `[camera].auto_trim` で黒パディング対策ができます。
+camera/meta には capture 開始/終了や read_ms などレイテンシ計測用の追加フィールドが含まれ、`examples/remote_zenoh_tool.py camera-latency` でグラフ出力できます。`config.toml` の `[camera].auto_trim` で黒パディング対策、`buffer_size`/`latest_only` で遅延低減ができます。
 
 デフォルト配備先は `/home/fooping/dmc_ai_mobility`、venv は `/home/fooping/env` を想定しています。変更する場合は systemd ユニットのパスを合わせて更新してください。

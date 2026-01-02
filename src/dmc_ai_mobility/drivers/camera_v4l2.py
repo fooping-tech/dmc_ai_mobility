@@ -59,6 +59,7 @@ class OpenCVCameraConfig:
     width: int = 640
     height: int = 480
     auto_trim: bool = False
+    buffer_size: int = 0
 
 
 class OpenCVCameraDriver:
@@ -72,6 +73,7 @@ class OpenCVCameraDriver:
         self._width = config.width
         self._height = config.height
         self._auto_trim = bool(config.auto_trim)
+        self._buffer_size = int(config.buffer_size)
         self._trim_logged = False
         self._cap = self._open_capture()
         self._fail_count = 0
@@ -101,6 +103,12 @@ class OpenCVCameraDriver:
             raise RuntimeError(f"camera open failed (device={self._device})") from last_err
         cap.set(self._cv2.CAP_PROP_FRAME_WIDTH, self._width)
         cap.set(self._cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+        if self._buffer_size > 0 and hasattr(self._cv2, "CAP_PROP_BUFFERSIZE"):
+            ok = cap.set(self._cv2.CAP_PROP_BUFFERSIZE, self._buffer_size)
+            if ok:
+                logger.info("camera buffer size set to %s", self._buffer_size)
+            else:
+                logger.warning("camera buffer size set failed (value=%s)", self._buffer_size)
         if not cap.isOpened():
             raise RuntimeError(
                 f"camera open failed (device={self._device}). "

@@ -11,7 +11,12 @@ from dmc_ai_mobility.core.config import RobotConfig
 from dmc_ai_mobility.core.oled_bitmap import load_oled_asset_mono1, mono1_buf_len
 from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd
-from dmc_ai_mobility.drivers.camera_v4l2 import MockCameraDriver, OpenCVCameraConfig, OpenCVCameraDriver
+from dmc_ai_mobility.drivers.camera_v4l2 import (
+    CameraFrame,
+    MockCameraDriver,
+    OpenCVCameraConfig,
+    OpenCVCameraDriver,
+)
 from dmc_ai_mobility.drivers.imu import MockImuDriver, Mpu9250ImuDriver, MpuImuConfig
 from dmc_ai_mobility.drivers.lidar import MockLidarDriver, YdLidarConfig, YdLidarDriver
 from dmc_ai_mobility.drivers.motor import MockMotorDriver, PigpioMotorConfig, PigpioMotorDriver
@@ -108,6 +113,7 @@ def run_robot(
                         width=config.camera.width,
                         height=config.camera.height,
                         auto_trim=config.camera.auto_trim,
+                        buffer_size=config.camera.buffer_size,
                     )
                 )
             except Exception as e:
@@ -355,47 +361,115 @@ def run_robot(
     imu_thread.start()
 
     camera_thread: Optional[threading.Thread] = None
+    camera_capture_thread: Optional[threading.Thread] = None
     if config.camera.enable and not no_camera:
-        def camera_loop() -> None:
-            # カメラ画像（JPEG バイト列）を一定 FPS で publish する。
-            sleeper = PeriodicSleeper(config.camera.fps)
-            key_img = keys.camera_image_jpeg(robot_id)
-            key_meta = keys.camera_meta(robot_id)
-            seq = 0
-            while not stop_event.is_set():
-                frame = camera.read_jpeg()
-                if frame:
-                    # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
-                    session.publish(key_img, frame.jpeg)
-                    # publish 実行時刻を取得（パイプライン遅延の計測用）
-                    publish_wall_ms = wall_clock_ms()
-                    publish_mono_ms = monotonic_ms()
-                    pipeline_ms = max(0, publish_mono_ms - frame.capture_mono_ms)
-                    # 画像メタ情報（サイズ/FPS/連番/時刻）を `camera/meta` に JSON で publish。
-                    publish_json(
-                        session,
-                        key_meta,
-                        {
-                            "width": frame.width,
-                            "height": frame.height,
-                            "fps": config.camera.fps,
-                            "seq": seq,
-                            "ts_ms": publish_wall_ms,
-                            "capture_ts_ms": frame.capture_wall_ms,
-                            "publish_ts_ms": publish_wall_ms,
-                            "pipeline_ms": pipeline_ms,
-                            "capture_mono_ms": frame.capture_mono_ms,
-                            "publish_mono_ms": publish_mono_ms,
-                            "capture_start_mono_ms": frame.capture_start_mono_ms,
-                            "capture_end_mono_ms": frame.capture_end_mono_ms,
-                            "read_ms": frame.read_ms,
-                        },
-                    )
-                    seq += 1
-                sleeper.sleep()
+        if config.camera.latest_only:
+            latest_lock = threading.Lock()
+            latest_frame: Optional[tuple[int, CameraFrame]] = None
+            capture_seq = 0
 
-        camera_thread = threading.Thread(target=camera_loop, name="camera_loop", daemon=True)
-        camera_thread.start()
+            def capture_loop() -> None:
+                # 最新フレームのみ保持する（溜まりを防ぐ）
+                nonlocal latest_frame, capture_seq
+                sleeper = PeriodicSleeper(config.camera.fps)
+                while not stop_event.is_set():
+                    frame = camera.read_jpeg()
+                    if frame:
+                        with latest_lock:
+                            latest_frame = (capture_seq, frame)
+                        capture_seq += 1
+                    sleeper.sleep()
+
+            def publish_loop() -> None:
+                # カメラ画像（JPEG バイト列）を一定 FPS で publish する。
+                sleeper = PeriodicSleeper(config.camera.fps)
+                key_img = keys.camera_image_jpeg(robot_id)
+                key_meta = keys.camera_meta(robot_id)
+                last_published_seq = -1
+                while not stop_event.is_set():
+                    with latest_lock:
+                        current = latest_frame
+                    if current:
+                        seq, frame = current
+                        if seq != last_published_seq:
+                            # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
+                            session.publish(key_img, frame.jpeg)
+                            # publish 実行時刻を取得（パイプライン遅延の計測用）
+                            publish_wall_ms = wall_clock_ms()
+                            publish_mono_ms = monotonic_ms()
+                            pipeline_ms = max(0, publish_mono_ms - frame.capture_mono_ms)
+                            # 画像メタ情報（サイズ/FPS/連番/時刻）を `camera/meta` に JSON で publish。
+                            publish_json(
+                                session,
+                                key_meta,
+                                {
+                                    "width": frame.width,
+                                    "height": frame.height,
+                                    "fps": config.camera.fps,
+                                    "seq": seq,
+                                    "ts_ms": publish_wall_ms,
+                                    "capture_ts_ms": frame.capture_wall_ms,
+                                    "publish_ts_ms": publish_wall_ms,
+                                    "pipeline_ms": pipeline_ms,
+                                    "capture_mono_ms": frame.capture_mono_ms,
+                                    "publish_mono_ms": publish_mono_ms,
+                                    "capture_start_mono_ms": frame.capture_start_mono_ms,
+                                    "capture_end_mono_ms": frame.capture_end_mono_ms,
+                                    "read_ms": frame.read_ms,
+                                },
+                            )
+                            last_published_seq = seq
+                    sleeper.sleep()
+
+            camera_capture_thread = threading.Thread(
+                target=capture_loop, name="camera_capture_loop", daemon=True
+            )
+            camera_thread = threading.Thread(
+                target=publish_loop, name="camera_publish_loop", daemon=True
+            )
+            camera_capture_thread.start()
+            camera_thread.start()
+        else:
+            def camera_loop() -> None:
+                # カメラ画像（JPEG バイト列）を一定 FPS で publish する。
+                sleeper = PeriodicSleeper(config.camera.fps)
+                key_img = keys.camera_image_jpeg(robot_id)
+                key_meta = keys.camera_meta(robot_id)
+                seq = 0
+                while not stop_event.is_set():
+                    frame = camera.read_jpeg()
+                    if frame:
+                        # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
+                        session.publish(key_img, frame.jpeg)
+                        # publish 実行時刻を取得（パイプライン遅延の計測用）
+                        publish_wall_ms = wall_clock_ms()
+                        publish_mono_ms = monotonic_ms()
+                        pipeline_ms = max(0, publish_mono_ms - frame.capture_mono_ms)
+                        # 画像メタ情報（サイズ/FPS/連番/時刻）を `camera/meta` に JSON で publish。
+                        publish_json(
+                            session,
+                            key_meta,
+                            {
+                                "width": frame.width,
+                                "height": frame.height,
+                                "fps": config.camera.fps,
+                                "seq": seq,
+                                "ts_ms": publish_wall_ms,
+                                "capture_ts_ms": frame.capture_wall_ms,
+                                "publish_ts_ms": publish_wall_ms,
+                                "pipeline_ms": pipeline_ms,
+                                "capture_mono_ms": frame.capture_mono_ms,
+                                "publish_mono_ms": publish_mono_ms,
+                                "capture_start_mono_ms": frame.capture_start_mono_ms,
+                                "capture_end_mono_ms": frame.capture_end_mono_ms,
+                                "read_ms": frame.read_ms,
+                            },
+                        )
+                        seq += 1
+                    sleeper.sleep()
+
+            camera_thread = threading.Thread(target=camera_loop, name="camera_loop", daemon=True)
+            camera_thread.start()
 
     lidar_thread: Optional[threading.Thread] = None
     if lidar_enabled:
@@ -500,6 +574,8 @@ def run_robot(
         oled_thread.join(timeout=1.0)
     if camera_thread and camera_thread.is_alive():
         camera_thread.join(timeout=1.0)
+    if camera_capture_thread and camera_capture_thread.is_alive():
+        camera_capture_thread.join(timeout=1.0)
     if lidar_thread and lidar_thread.is_alive():
         lidar_thread.join(timeout=1.0)
 

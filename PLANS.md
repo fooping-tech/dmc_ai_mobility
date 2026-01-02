@@ -206,7 +206,7 @@ This plan follows `PLANS.md` at the repository root. It also incorporates the re
 
 ## Purpose / Big Picture
 
-Add a reliable way to measure camera latency both on the robot (capture→publish pipeline) and on a remote host (end-to-end). Contributors should be able to see per-frame latency in `camera/meta` and compute end-to-end latency with a subscription tool when clocks are synchronized (e.g., NTP).
+Add a reliable way to measure camera latency both on the robot (capture→publish pipeline) and on a remote host (publish→receive). Contributors should be able to see per-frame latency in `camera/meta` and compute publish→receive latency with a subscription tool when clocks are synchronized (e.g., NTP).
 
 ## Progress
 
@@ -232,10 +232,10 @@ Add a reliable way to measure camera latency both on the robot (capture→publis
   Date/Author: 2026-01-02 / Codex
 
 - Decision: Include both monotonic-based pipeline latency and wall-clock timestamps.
-  Rationale: Monotonic avoids clock jumps for local latency, while wall-clock enables remote end-to-end measurement when time is synchronized.
+  Rationale: Monotonic avoids clock jumps for local latency, while wall-clock enables remote publish→receive measurement when time is synchronized.
   Date/Author: 2026-01-02 / Codex
 
-- Decision: Add a remote subscriber tool in `examples/remote_zenoh_tool.py` to compute end-to-end latency.
+- Decision: Add a remote subscriber tool in `examples/remote_zenoh_tool.py` to compute publish→receive latency.
   Rationale: Keeps remote measurement close to existing Zenoh tooling and avoids introducing a new dependency.
   Date/Author: 2026-01-02 / Codex
 
@@ -248,7 +248,7 @@ Add a reliable way to measure camera latency both on the robot (capture→publis
 At completion:
 
 - `camera/meta` includes capture timestamp, publish timestamp, and pipeline latency.
-- A remote tool prints end-to-end latency statistics from `camera/meta`.
+- A remote tool prints publish→receive latency statistics from `camera/meta`.
 - Dry-run produces synthetic frames so latency measurement can be validated without hardware.
 
 ## Context and Orientation
@@ -273,7 +273,7 @@ Key files:
 Terms:
 
 - Pipeline latency: capture→publish duration measured on the robot.
-- End-to-end latency: capture→remote-receive duration (requires synchronized clocks).
+- Publish-to-remote latency: publish→remote-receive duration (requires synchronized clocks).
 
 ## Plan of Work
 
@@ -289,10 +289,10 @@ Terms:
    - Preserve existing fields (`width`, `height`, `fps`, `seq`, `ts_ms`) for backward compatibility.
 
 3) Add a remote latency measurement command in `examples/remote_zenoh_tool.py`.
-   - Subscribe to `camera/meta`, compute `end_to_end_ms = recv_wall_ms - capture_ts_ms`.
+   - Subscribe to `camera/meta`, compute `publish_to_remote_ms = recv_wall_ms - publish_ts_ms`.
    - Print rolling stats (min/avg/p50/p95) and per-sample line.
    - Render a graph (matplotlib) or save a PNG when requested.
-   - Document that accurate end-to-end requires time sync (e.g., NTP).
+   - Document that accurate publish→receive requires time sync (e.g., NTP).
 
 4) Update schemas and docs.
    - Extend `src/dmc_ai_mobility/zenoh/schemas.py` `CAMERA_META_SCHEMA`.
@@ -301,7 +301,7 @@ Terms:
 
 5) Validate.
    - Dry-run: run robot node with `--dry-run` and confirm new meta fields are published.
-   - Remote tool: subscribe and confirm end-to-end values.
+   - Remote tool: subscribe and confirm publish→receive values.
    - Hardware path: optional validation on Raspberry Pi with camera enabled.
 
 ## Concrete Steps
@@ -331,16 +331,16 @@ Example commands (repo root):
 No-hardware:
 
 - Running the robot in dry-run publishes `camera/meta` with new latency fields.
-- Remote tool prints end-to-end latency from the received metadata.
-- Remote tool can display or save a graph of pipeline/end-to-end latency.
+- Remote tool prints publish→receive latency from the received metadata.
+- Remote tool can display or save a graph of pipeline/publish→receive latency.
 
 Hardware:
 
 - `pipeline_ms` is non-zero and stable (expected low tens of ms at 640x480/10fps).
-- End-to-end metrics are plausible and stable when clocks are synchronized.
+- Publish→receive metrics are plausible and stable when clocks are synchronized.
 - Camera size comparison baselines (use consistent lighting and FPS):
   - 160x120 (x-low), 320x240 (low), 640x480 (baseline), 1280x720 (high).
-  - Record median and p95 for `pipeline_ms` and end-to-end over >= 100 frames per size.
+  - Record median and p95 for `pipeline_ms` and publish→receive over >= 100 frames per size.
   - Expect latency to increase monotonically with size; document deviations in `Surprises & Discoveries`.
 
 ## Idempotence and Recovery
@@ -376,10 +376,11 @@ Example `camera/meta` payload (expanded schema):
 - `camera/meta` schema extended with latency fields in `src/dmc_ai_mobility/zenoh/schemas.py`.
 - `examples/remote_zenoh_tool.py` new `camera-latency` command with optional matplotlib graph output.
 - Optional dependency: `matplotlib` for plotting on the remote host.
-- Time sync (NTP) required for accurate end-to-end measurement.
+- Time sync (NTP) required for accurate publish→receive measurement.
 
 Update Note: Added graph output requirement for the remote latency tool, documented optional matplotlib dependency, and expanded size baselines to include 160x120.
 Update Note: Extended the planned camera/meta fields to include capture start/end timing and read_ms for capture-start-based latency measurement.
+Update Note: Updated the plan language to publish→receive latency to match the current remote tool output.
 
 - The runtime target is Raspberry Pi OS (Linux) with Python 3.x, as described in `docs/dmc_ai_mobility_software_design.md`.
 - Drivers live in `src/dmc_ai_mobility/drivers/` and are used by higher-level nodes (for example `src/dmc_ai_mobility/app/robot_node.py`).
