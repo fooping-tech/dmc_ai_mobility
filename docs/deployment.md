@@ -37,6 +37,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now dmc-ai-mobility.service
 ```
 
+H.264 の検証で libcamerify を無効化したい場合は、検証用ユニットを使います。
+
+```bash
+sudo cp systemd/dmc-ai-mobility-h264.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dmc-ai-mobility-h264.service
+```
+
 ## 5) 動作確認
 
 ```bash
