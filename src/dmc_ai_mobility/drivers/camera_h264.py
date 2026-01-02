@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
@@ -31,6 +32,8 @@ class LibcameraH264Driver:
         self._chunk_bytes = max(1, int(config.chunk_bytes))
         self._proc: Optional[subprocess.Popen[bytes]] = None
         self._stderr_thread: Optional[threading.Thread] = None
+        self._cmd_label = "camera-vid"
+        self._logged_exit = False
         self._start_process()
 
     def _start_process(self) -> None:
@@ -39,6 +42,7 @@ class LibcameraH264Driver:
             raise RuntimeError(
                 "rpicam-vid/libcamera-vid not found; install rpicam-apps (bookworm) or libcamera-apps"
             )
+        self._cmd_label = Path(cmd_name).name
         cmd = [
             cmd_name,
             "--codec",
@@ -59,11 +63,16 @@ class LibcameraH264Driver:
         if self._bitrate > 0:
             cmd.extend(["--bitrate", str(self._bitrate)])
         logger.info("starting camera encoder: %s", " ".join(cmd))
+        env = dict(os.environ)
+        # Avoid running camera apps under libcamerify preload.
+        if "LD_PRELOAD" in env and "libcamerify" in env["LD_PRELOAD"]:
+            env.pop("LD_PRELOAD", None)
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
+            env=env,
         )
 
         if self._proc.stderr:
@@ -78,12 +87,15 @@ class LibcameraH264Driver:
             line = self._proc.stderr.readline()
             if not line:
                 break
-            logger.info("libcamera-vid: %s", line.decode("utf-8", errors="replace").rstrip())
+            logger.info("%s: %s", self._cmd_label, line.decode("utf-8", errors="replace").rstrip())
 
     def read_chunk(self, *, timeout_s: float = 0.5) -> Optional[bytes]:
         if self._proc is None or self._proc.stdout is None:
             return None
         if self._proc.poll() is not None:
+            if not self._logged_exit:
+                logger.warning("%s exited (code=%s)", self._cmd_label, self._proc.returncode)
+                self._logged_exit = True
             return None
         rlist, _, _ = select.select([self._proc.stdout], [], [], timeout_s)
         if not rlist:

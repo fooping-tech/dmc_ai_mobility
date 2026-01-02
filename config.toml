@@ -34,7 +34,7 @@ boot_image = "assets/bin/boot.bin"
 # motor_image = "assets/oled/motor.bin"
 
 [camera]
-enable = true
+enable = false
 device = 0
 width = 160
 height = 120
@@ -49,7 +49,7 @@ buffer_size = 1
 latest_only = true
 
 [camera_h264]
-enable = false
+enable = true
 width = 640
 height = 480
 fps = 30
