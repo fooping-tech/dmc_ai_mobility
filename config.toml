@@ -36,8 +36,8 @@ boot_image = "assets/bin/boot.bin"
 [camera]
 enable = true
 device = 0
-width = 640
-height = 480
+width = 160
+height = 120
 fps = 10
 
 [lidar]
