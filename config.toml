@@ -38,7 +38,7 @@ enable = true
 device = 0
 width = 160
 height = 120
-fps = 10
+fps = 7
 # Trim right/bottom padding when the actual frame is larger than the requested size.
 auto_trim = true
 
