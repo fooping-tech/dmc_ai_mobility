@@ -84,7 +84,7 @@ def run_robot(
     motor = MockMotorDriver(motor_cfg)
     imu = MockImuDriver()
     oled = MockOledDriver()
-    camera = MockCameraDriver()
+    camera = MockCameraDriver(width=config.camera.width, height=config.camera.height)
     lidar = MockLidarDriver()
     lidar_enabled = bool(config.lidar.enable)
 
@@ -362,14 +362,30 @@ def run_robot(
             while not stop_event.is_set():
                 frame = camera.read_jpeg()
                 if frame:
-                    jpeg, w, h = frame
                     # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
-                    session.publish(key_img, jpeg)
+                    session.publish(key_img, frame.jpeg)
+                    publish_wall_ms = wall_clock_ms()
+                    publish_mono_ms = monotonic_ms()
+                    pipeline_ms = max(0, publish_mono_ms - frame.capture_mono_ms)
                     # 画像メタ情報（サイズ/FPS/連番/時刻）を `camera/meta` に JSON で publish。
                     publish_json(
                         session,
                         key_meta,
-                        {"width": w, "height": h, "fps": config.camera.fps, "seq": seq, "ts_ms": wall_clock_ms()},
+                        {
+                            "width": frame.width,
+                            "height": frame.height,
+                            "fps": config.camera.fps,
+                            "seq": seq,
+                            "ts_ms": publish_wall_ms,
+                            "capture_ts_ms": frame.capture_wall_ms,
+                            "publish_ts_ms": publish_wall_ms,
+                            "pipeline_ms": pipeline_ms,
+                            "capture_mono_ms": frame.capture_mono_ms,
+                            "publish_mono_ms": publish_mono_ms,
+                            "capture_start_mono_ms": frame.capture_start_mono_ms,
+                            "capture_end_mono_ms": frame.capture_end_mono_ms,
+                            "read_ms": frame.read_ms,
+                        },
                     )
                     seq += 1
                 sleeper.sleep()

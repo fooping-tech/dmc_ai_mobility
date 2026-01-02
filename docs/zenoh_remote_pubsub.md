@@ -244,6 +244,32 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
     s.close()
     PY
 
+## 4b) camera レイテンシ計測（グラフ表示）
+
+`camera/meta` の `capture_ts_ms` と受信時刻から end-to-end レイテンシを計測します。  
+`--plot` または `--plot-out` を使う場合は `matplotlib` が必要です（`pip install matplotlib`）。
+
+計測の意味:
+- `read_ms`: `cap.read()` の開始→終了（キャプチャ読み取り時間の近似）。
+- `pipeline_ms`: キャプチャ終了→publish（JPEG encode + publish を含む）。
+- `end_to_end_ms`（remote tool）: キャプチャ終了→受信（時計同期が必要）。
+- キャプチャ開始→publish を見たい場合は `publish_mono_ms - capture_start_mono_ms` を使います。
+
+実行例（コンソール表示のみ）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 20 --print-each
+
+実行例（PNG 出力）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 30 --plot-out ./camera_latency.png
+
+実行例（画面表示 + 保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 30 --plot --plot-out ./camera_latency.png
+
 ## 5) lidar を Subscribe（角度ごとの生値 / 正面サマリ）
 
 ロボットが publish しているキー:

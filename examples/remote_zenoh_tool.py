@@ -10,6 +10,8 @@ Usage and Zenoh connection configuration examples are documented in:
 
 import argparse
 import json
+import math
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -183,6 +185,95 @@ def _decode_json_payload(sample: Any) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
+def _percentile(sorted_vals: list[float], pct: float) -> float:
+    if not sorted_vals:
+        raise ValueError("empty values")
+    k = (len(sorted_vals) - 1) * (pct / 100.0)
+    f = math.floor(k)
+    c = math.ceil(k)
+    if f == c:
+        return float(sorted_vals[int(k)])
+    return float(sorted_vals[f]) + (float(sorted_vals[c]) - float(sorted_vals[f])) * (k - f)
+
+
+def _summarize(values: list[float]) -> dict[str, float]:
+    if not values:
+        return {}
+    vals = sorted(float(v) for v in values)
+    avg = sum(vals) / len(vals)
+    return {
+        "count": float(len(vals)),
+        "min": float(vals[0]),
+        "avg": float(avg),
+        "p50": float(_percentile(vals, 50)),
+        "p95": float(_percentile(vals, 95)),
+        "max": float(vals[-1]),
+    }
+
+
+def _print_summary(label: str, values: list[float]) -> None:
+    stats = _summarize(values)
+    if not stats:
+        print(f"{label}: no samples")
+        return
+    print(
+        f"{label}: count={int(stats['count'])} min={stats['min']:.1f} avg={stats['avg']:.1f} "
+        f"p50={stats['p50']:.1f} p95={stats['p95']:.1f} max={stats['max']:.1f}"
+    )
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _plot_latency(samples: list[dict[str, Any]], *, title: str | None, out_path: Path | None, show: bool) -> None:
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as e:
+        raise SystemExit("matplotlib is required for --plot/--plot-out (pip install matplotlib)") from e
+
+    if not samples:
+        print("no samples to plot")
+        return
+
+    xs: list[float] = []
+    pipeline: list[float] = []
+    e2e: list[float] = []
+    for idx, sample in enumerate(samples):
+        seq = sample.get("seq")
+        xs.append(float(seq) if seq is not None else float(idx))
+        pipeline_val = sample.get("pipeline_ms")
+        e2e_val = sample.get("end_to_end_ms")
+        pipeline.append(float(pipeline_val) if pipeline_val is not None else math.nan)
+        e2e.append(float(e2e_val) if e2e_val is not None else math.nan)
+
+    fig, ax = plt.subplots()
+    ax.plot(xs, pipeline, label="pipeline_ms")
+    ax.plot(xs, e2e, label="end_to_end_ms")
+    ax.set_xlabel("seq")
+    ax.set_ylabel("ms")
+    ax.grid(True, linestyle="--", alpha=0.4)
+    if title:
+        ax.set_title(title)
+    ax.legend()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        print(f"saved plot: {out_path}")
+    if show:
+        plt.show()
+
+
 def cmd_imu(args: argparse.Namespace) -> int:
     key = _key(args.robot_id, "imu/state")
     session = args.open_session()
@@ -255,6 +346,81 @@ def cmd_camera(args: argparse.Namespace) -> int:
         sub_img.undeclare()
         sub_meta.undeclare()
         session.close()
+    return 0
+
+
+def cmd_camera_latency(args: argparse.Namespace) -> int:
+    key_meta = _key(args.robot_id, "camera/meta")
+    session = args.open_session()
+
+    samples: list[dict[str, Any]] = []
+    lock = threading.Lock()
+    stop_event = threading.Event()
+
+    def on_meta(sample: Any) -> None:
+        try:
+            meta = _decode_json_payload(sample)
+        except Exception:
+            return
+
+        recv_ts_ms = int(time.time() * 1000)
+        capture_ts_ms = _to_int(meta.get("capture_ts_ms"))
+        pipeline_ms = _to_float(meta.get("pipeline_ms"))
+        end_to_end_ms = None
+        if capture_ts_ms is not None:
+            end_to_end_ms = float(recv_ts_ms - capture_ts_ms)
+
+        entry = {
+            "seq": _to_int(meta.get("seq")),
+            "capture_ts_ms": capture_ts_ms,
+            "recv_ts_ms": recv_ts_ms,
+            "pipeline_ms": pipeline_ms,
+            "end_to_end_ms": end_to_end_ms,
+        }
+
+        with lock:
+            samples.append(entry)
+            sample_count = len(samples)
+
+        if args.print_each:
+            print(
+                "seq={seq} pipeline_ms={pipeline_ms} end_to_end_ms={end_to_end_ms} "
+                "capture_ts_ms={capture_ts_ms} recv_ts_ms={recv_ts_ms}".format(**entry)
+            )
+
+        if args.max_samples > 0 and sample_count >= args.max_samples:
+            stop_event.set()
+
+    sub = session.declare_subscriber(key_meta, on_meta)
+    try:
+        if args.duration_s > 0:
+            deadline = time.monotonic() + args.duration_s
+            while not stop_event.is_set() and time.monotonic() < deadline:
+                time.sleep(0.1)
+        else:
+            def _wait_input() -> None:
+                input("subscribing camera latency... press Enter to quit\n")
+                stop_event.set()
+
+            threading.Thread(target=_wait_input, daemon=True).start()
+            while not stop_event.is_set():
+                time.sleep(0.1)
+    finally:
+        sub.undeclare()
+        session.close()
+
+    with lock:
+        snapshot = list(samples)
+
+    pipeline_vals = [s["pipeline_ms"] for s in snapshot if isinstance(s.get("pipeline_ms"), (int, float))]
+    e2e_vals = [s["end_to_end_ms"] for s in snapshot if isinstance(s.get("end_to_end_ms"), (int, float))]
+
+    _print_summary("pipeline_ms", pipeline_vals)
+    _print_summary("end_to_end_ms", e2e_vals)
+
+    if args.plot or args.plot_out:
+        _plot_latency(snapshot, title=args.plot_title, out_path=args.plot_out, show=bool(args.plot))
+
     return 0
 
 
@@ -395,6 +561,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     cam.add_argument("--out-dir", type=Path, default=Path("./camera_frames"))
     cam.add_argument("--print-meta", action="store_true")
     cam.set_defaults(func=cmd_camera)
+
+    cam_latency = sub.add_parser("camera-latency", help="Subscribe camera/meta and report latency stats")
+    cam_latency.add_argument(
+        "--duration-s",
+        type=float,
+        default=10.0,
+        help="Measurement duration in seconds (<=0 waits for Enter).",
+    )
+    cam_latency.add_argument(
+        "--max-samples",
+        type=int,
+        default=0,
+        help="Stop after N samples (0 = unlimited).",
+    )
+    cam_latency.add_argument("--print-each", action="store_true", help="Print per-sample latency")
+    cam_latency.add_argument("--plot", action="store_true", help="Show matplotlib graph (requires matplotlib)")
+    cam_latency.add_argument("--plot-out", type=Path, default=None, help="Save graph to a file (png)")
+    cam_latency.add_argument("--plot-title", type=str, default=None, help="Optional plot title")
+    cam_latency.set_defaults(func=cmd_camera_latency)
 
     lidar = sub.add_parser("lidar", help="Subscribe lidar scan/front and print")
     lidar.add_argument("--scan", action="store_true", help="Subscribe lidar/scan (angle-wise raw values)")

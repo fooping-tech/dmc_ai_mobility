@@ -1,21 +1,53 @@
 from __future__ import annotations
 
+import base64
 import logging
 from dataclasses import dataclass
 import time
-from typing import Optional, Protocol, Tuple
+from typing import Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
+_MOCK_JPEG = base64.b64decode(
+    b"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGn/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k="
+)
+
+
+@dataclass(frozen=True)
+class CameraFrame:
+    jpeg: bytes
+    width: int
+    height: int
+    capture_wall_ms: int
+    capture_mono_ms: int
+    capture_start_mono_ms: int
+    capture_end_mono_ms: int
+    read_ms: int
+
 
 class CameraDriver(Protocol):
-    def read_jpeg(self) -> Optional[Tuple[bytes, int, int]]: ...
+    def read_jpeg(self) -> Optional[CameraFrame]: ...
     def close(self) -> None: ...
 
 
 class MockCameraDriver:
-    def read_jpeg(self) -> Optional[Tuple[bytes, int, int]]:
-        return None
+    def __init__(self, width: int = 640, height: int = 480) -> None:
+        self._width = int(width)
+        self._height = int(height)
+
+    def read_jpeg(self) -> Optional[CameraFrame]:
+        now_wall_ms = int(time.time() * 1000)
+        now_mono_ms = int(time.monotonic() * 1000)
+        return CameraFrame(
+            jpeg=_MOCK_JPEG,
+            width=self._width,
+            height=self._height,
+            capture_wall_ms=now_wall_ms,
+            capture_mono_ms=now_mono_ms,
+            capture_start_mono_ms=now_mono_ms,
+            capture_end_mono_ms=now_mono_ms,
+            read_ms=0,
+        )
 
     def close(self) -> None:
         return
@@ -81,11 +113,13 @@ class OpenCVCameraDriver:
                 break
         return cap
 
-    def read_jpeg(self) -> Optional[Tuple[bytes, int, int]]:
+    def read_jpeg(self) -> Optional[CameraFrame]:
+        capture_start_mono_ms = int(time.monotonic() * 1000)
         try:
             ok, frame = self._cap.read()
         except Exception:
             ok, frame = False, None
+        capture_end_mono_ms = int(time.monotonic() * 1000)
         if not ok or frame is None:
             self._fail_count += 1
             now_ms = time.monotonic() * 1000.0
@@ -114,11 +148,23 @@ class OpenCVCameraDriver:
             return None
         # Successful read: clear transient failure state.
         self._fail_count = 0
+        capture_mono_ms = capture_end_mono_ms
+        capture_wall_ms = int(time.time() * 1000)
+        read_ms = max(0, capture_end_mono_ms - capture_start_mono_ms)
         ok, buf = self._cv2.imencode(".jpg", frame)
         if not ok:
             logger.warning("camera jpeg encode failed")
             return None
-        return (bytes(buf), int(frame.shape[1]), int(frame.shape[0]))
+        return CameraFrame(
+            jpeg=bytes(buf),
+            width=int(frame.shape[1]),
+            height=int(frame.shape[0]),
+            capture_wall_ms=capture_wall_ms,
+            capture_mono_ms=capture_mono_ms,
+            capture_start_mono_ms=capture_start_mono_ms,
+            capture_end_mono_ms=capture_end_mono_ms,
+            read_ms=read_ms,
+        )
 
     def close(self) -> None:
         self._cap.release()

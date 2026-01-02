@@ -198,6 +198,189 @@ At completion:
 
 Relevant repository concepts and files:
 
+## ExecPlan: Add camera latency measurement (local + remote)
+
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
+
+## Purpose / Big Picture
+
+Add a reliable way to measure camera latency both on the robot (capture→publish pipeline) and on a remote host (end-to-end). Contributors should be able to see per-frame latency in `camera/meta` and compute end-to-end latency with a subscription tool when clocks are synchronized (e.g., NTP).
+
+## Progress
+
+- [x] Define latency semantics and fields for `camera/meta`.
+- [x] Extend the camera driver interface to capture timing data.
+- [x] Publish pipeline latency in `camera/meta`.
+- [x] Add a remote latency subscriber tool with graph output and document how to use it.
+- [x] Add a no-hardware validation path.
+- [x] Update schemas and docs to reflect the new fields.
+- [ ] Validate on dry-run and Raspberry Pi hardware.
+
+## Surprises & Discoveries
+
+- Observation: `camera/meta` currently publishes only width/height/fps/seq/ts_ms (publish time) and has no capture timestamp.
+  Evidence: `src/dmc_ai_mobility/app/robot_node.py`, `src/dmc_ai_mobility/zenoh/schemas.py`, `docs/keys_and_payloads.md`.
+- Observation: `MockCameraDriver` returns `None`, so dry-run currently publishes no camera frames.
+  Evidence: `src/dmc_ai_mobility/drivers/camera_v4l2.py`.
+
+## Decision Log
+
+- Decision: Extend `camera/meta` rather than creating a new key for latency.
+  Rationale: Backward-compatible and keeps metadata in a single place.
+  Date/Author: 2026-01-02 / Codex
+
+- Decision: Include both monotonic-based pipeline latency and wall-clock timestamps.
+  Rationale: Monotonic avoids clock jumps for local latency, while wall-clock enables remote end-to-end measurement when time is synchronized.
+  Date/Author: 2026-01-02 / Codex
+
+- Decision: Add a remote subscriber tool in `examples/remote_zenoh_tool.py` to compute end-to-end latency.
+  Rationale: Keeps remote measurement close to existing Zenoh tooling and avoids introducing a new dependency.
+  Date/Author: 2026-01-02 / Codex
+
+- Decision: Use optional matplotlib output for latency graphs in the remote tool.
+  Rationale: Provides a standard, lightweight way to plot series while keeping the base tool dependency-free.
+  Date/Author: 2026-01-02 / Codex
+
+## Outcomes & Retrospective
+
+At completion:
+
+- `camera/meta` includes capture timestamp, publish timestamp, and pipeline latency.
+- A remote tool prints end-to-end latency statistics from `camera/meta`.
+- Dry-run produces synthetic frames so latency measurement can be validated without hardware.
+
+## Context and Orientation
+
+Runtime environment:
+
+- Raspberry Pi OS, Python 3.x, systemd (per `docs/dmc_ai_mobility_software_design.md`).
+
+Camera publishing today:
+
+- JPEG bytes are published to `dmc_robo/<robot_id>/camera/image/jpeg`.
+- JSON metadata is published to `dmc_robo/<robot_id>/camera/meta` from `src/dmc_ai_mobility/app/robot_node.py`.
+
+Key files:
+
+- `src/dmc_ai_mobility/drivers/camera_v4l2.py` (OpenCV capture + JPEG encoding).
+- `src/dmc_ai_mobility/core/timing.py` (`monotonic_ms`, `wall_clock_ms`).
+- `src/dmc_ai_mobility/zenoh/keys.py`, `src/dmc_ai_mobility/zenoh/schemas.py`.
+- `examples/remote_zenoh_tool.py` (Zenoh subscriber tool).
+- `docs/keys_and_payloads.md`, `docs/zenoh_remote_pubsub.md` (user-facing schema docs).
+
+Terms:
+
+- Pipeline latency: capture→publish duration measured on the robot.
+- End-to-end latency: capture→remote-receive duration (requires synchronized clocks).
+
+## Plan of Work
+
+1) Extend the camera driver interface to return timing metadata.
+   - Introduce a `CameraFrame` dataclass with `jpeg`, `width`, `height`, `capture_wall_ms`, `capture_mono_ms`, and `encode_ms` (or `encode_mono_ms`).
+   - Update `CameraDriver.read_jpeg()` to return `CameraFrame | None`.
+   - Update `MockCameraDriver` to emit synthetic frames with timestamps for dry-run.
+
+2) Update the camera loop in `src/dmc_ai_mobility/app/robot_node.py`.
+   - Compute `publish_wall_ms` and `publish_mono_ms` at publish time.
+   - Add fields to `camera/meta`: `capture_ts_ms`, `publish_ts_ms`, `pipeline_ms`, `capture_mono_ms`, `publish_mono_ms`,
+     `capture_start_mono_ms`, `capture_end_mono_ms`, `read_ms`.
+   - Preserve existing fields (`width`, `height`, `fps`, `seq`, `ts_ms`) for backward compatibility.
+
+3) Add a remote latency measurement command in `examples/remote_zenoh_tool.py`.
+   - Subscribe to `camera/meta`, compute `end_to_end_ms = recv_wall_ms - capture_ts_ms`.
+   - Print rolling stats (min/avg/p50/p95) and per-sample line.
+   - Render a graph (matplotlib) or save a PNG when requested.
+   - Document that accurate end-to-end requires time sync (e.g., NTP).
+
+4) Update schemas and docs.
+   - Extend `src/dmc_ai_mobility/zenoh/schemas.py` `CAMERA_META_SCHEMA`.
+   - Update `docs/keys_and_payloads.md` and `docs/zenoh_remote_pubsub.md` with the new fields and usage.
+   - Update `docs/index.md` if it lists camera meta fields.
+
+5) Validate.
+   - Dry-run: run robot node with `--dry-run` and confirm new meta fields are published.
+   - Remote tool: subscribe and confirm end-to-end values.
+   - Hardware path: optional validation on Raspberry Pi with camera enabled.
+
+## Concrete Steps
+
+1) Update driver interface and mock in:
+   - `src/dmc_ai_mobility/drivers/camera_v4l2.py`
+
+2) Update publish payload in:
+   - `src/dmc_ai_mobility/app/robot_node.py`
+
+3) Update schema and docs in:
+   - `src/dmc_ai_mobility/zenoh/schemas.py`
+   - `docs/keys_and_payloads.md`
+   - `docs/zenoh_remote_pubsub.md`
+   - `docs/index.md`
+
+4) Extend remote tool in:
+   - `examples/remote_zenoh_tool.py`
+
+Example commands (repo root):
+
+    python3 -m dmc_ai_mobility.app.cli robot --dry-run --log-level info
+    python3 examples/remote_zenoh_tool.py camera-latency --robot-id rasp-zero-01
+
+## Validation and Acceptance
+
+No-hardware:
+
+- Running the robot in dry-run publishes `camera/meta` with new latency fields.
+- Remote tool prints end-to-end latency from the received metadata.
+- Remote tool can display or save a graph of pipeline/end-to-end latency.
+
+Hardware:
+
+- `pipeline_ms` is non-zero and stable (expected low tens of ms at 640x480/10fps).
+- End-to-end metrics are plausible and stable when clocks are synchronized.
+- Camera size comparison baselines (use consistent lighting and FPS):
+  - 160x120 (x-low), 320x240 (low), 640x480 (baseline), 1280x720 (high).
+  - Record median and p95 for `pipeline_ms` and end-to-end over >= 100 frames per size.
+  - Expect latency to increase monotonically with size; document deviations in `Surprises & Discoveries`.
+
+## Idempotence and Recovery
+
+- Code changes are safe to re-apply; no mutable state migrations.
+- Disable camera via `--no-camera` or `[camera].enable = false` if issues arise.
+- Revert to previous behavior by removing new fields and the remote command.
+
+## Artifacts and Notes
+
+Example `camera/meta` payload (expanded schema):
+
+    {
+      "width": 640,
+      "height": 480,
+      "fps": 10,
+      "seq": 42,
+      "ts_ms": 1735467890123,
+      "capture_ts_ms": 1735467890110,
+      "publish_ts_ms": 1735467890123,
+      "pipeline_ms": 13,
+      "capture_mono_ms": 123456789,
+      "publish_mono_ms": 123456802,
+      "capture_start_mono_ms": 123456776,
+      "capture_end_mono_ms": 123456789,
+      "read_ms": 13
+    }
+
+## Interfaces and Dependencies
+
+- `CameraFrame` dataclass in `src/dmc_ai_mobility/drivers/camera_v4l2.py`.
+- `CameraDriver.read_jpeg() -> CameraFrame | None`.
+- `camera/meta` schema extended with latency fields in `src/dmc_ai_mobility/zenoh/schemas.py`.
+- `examples/remote_zenoh_tool.py` new `camera-latency` command with optional matplotlib graph output.
+- Optional dependency: `matplotlib` for plotting on the remote host.
+- Time sync (NTP) required for accurate end-to-end measurement.
+
+Update Note: Added graph output requirement for the remote latency tool, documented optional matplotlib dependency, and expanded size baselines to include 160x120.
+Update Note: Extended the planned camera/meta fields to include capture start/end timing and read_ms for capture-start-based latency measurement.
+
 - The runtime target is Raspberry Pi OS (Linux) with Python 3.x, as described in `docs/dmc_ai_mobility_software_design.md`.
 - Drivers live in `src/dmc_ai_mobility/drivers/` and are used by higher-level nodes (for example `src/dmc_ai_mobility/app/robot_node.py`).
 - LiDAR example: `examples/example_lidar_front_distance.py` (demonstration script; runnable with `--mock`).
