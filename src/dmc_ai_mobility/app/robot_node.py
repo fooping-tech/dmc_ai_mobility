@@ -104,7 +104,10 @@ def run_robot(
                 # V4L2/OpenCV からフレームを取得し、JPEG バイト列として取り出す。
                 camera = OpenCVCameraDriver(
                     OpenCVCameraConfig(
-                        device=config.camera.device, width=config.camera.width, height=config.camera.height
+                        device=config.camera.device,
+                        width=config.camera.width,
+                        height=config.camera.height,
+                        auto_trim=config.camera.auto_trim,
                     )
                 )
             except Exception as e:

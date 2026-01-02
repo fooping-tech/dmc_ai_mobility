@@ -58,6 +58,7 @@ class OpenCVCameraConfig:
     device: int = 0
     width: int = 640
     height: int = 480
+    auto_trim: bool = False
 
 
 class OpenCVCameraDriver:
@@ -70,6 +71,8 @@ class OpenCVCameraDriver:
         self._device = config.device
         self._width = config.width
         self._height = config.height
+        self._auto_trim = bool(config.auto_trim)
+        self._trim_logged = False
         self._cap = self._open_capture()
         self._fail_count = 0
         self._last_warn_ms = 0.0
@@ -154,6 +157,28 @@ class OpenCVCameraDriver:
         capture_mono_ms = capture_end_mono_ms
         capture_wall_ms = int(time.time() * 1000)
         read_ms = max(0, capture_end_mono_ms - capture_start_mono_ms)
+        if self._auto_trim:
+            orig_h, orig_w = frame.shape[:2]
+            target_w = int(self._width)
+            target_h = int(self._height)
+            trimmed = False
+            if target_w > 0 and orig_w > target_w:
+                frame = frame[:, :target_w]
+                trimmed = True
+            if target_h > 0 and orig_h > target_h:
+                frame = frame[:target_h, :]
+                trimmed = True
+            if trimmed and not self._trim_logged:
+                new_h, new_w = frame.shape[:2]
+                logger.info(
+                    "camera frame trimmed to %sx%s (from %sx%s)",
+                    new_w,
+                    new_h,
+                    orig_w,
+                    orig_h,
+                )
+                self._trim_logged = True
+
         ok, buf = self._cv2.imencode(".jpg", frame)
         if not ok:
             logger.warning("camera jpeg encode failed")

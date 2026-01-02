@@ -34,6 +34,7 @@ robot_id = "rasp-zero-01"
 - `enable`: カメラの有効/無効
 - `device`: V4L2 デバイス番号（例: 0 => `/dev/video0`）
 - `width`/`height`/`fps`: 取得サイズと publish 周期
+- `auto_trim`: 要求サイズより大きいフレームが返る場合に右/下をトリムする
 
 ## [lidar]
 
@@ -74,4 +75,5 @@ device = 0
 width = 640
 height = 480
 fps = 10
+auto_trim = true
 ```

@@ -49,6 +49,7 @@ class CameraConfig:
     width: int = 640
     height: int = 480
     fps: float = 10.0
+    auto_trim: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             width=int(camera.get("width", CameraConfig.width)),
             height=int(camera.get("height", CameraConfig.height)),
             fps=float(camera.get("fps", CameraConfig.fps)),
+            auto_trim=bool(camera.get("auto_trim", CameraConfig.auto_trim)),
         ),
         lidar=LidarConfig(
             enable=bool(lidar.get("enable", LidarConfig.enable)),
