@@ -39,6 +39,14 @@ robot_id = "rasp-zero-01"
 - `latest_only`: 最新フレームのみ保持し、遅延を溜めない
 - `jpeg_quality`: JPEG エンコード品質（1-100、低いほど軽い）
 
+## [camera_h264]
+
+- `enable`: H.264 配信の有効/無効
+- `width`/`height`/`fps`: H.264 の解像度とフレームレート
+- `bitrate`: H.264 のビットレート（bps）
+- `chunk_bytes`: 送信チャンクサイズ（bytes）
+- `libcamera-vid` が必要です（Raspberry Pi OS の libcamera-apps で提供）
+
 ## [lidar]
 
 - `enable`: LiDAR の有効/無効
@@ -82,4 +90,12 @@ auto_trim = true
 buffer_size = 1
 latest_only = true
 jpeg_quality = 80
+
+[camera_h264]
+enable = false
+width = 640
+height = 480
+fps = 30
+bitrate = 2000000
+chunk_bytes = 65536
 ```

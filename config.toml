@@ -48,6 +48,14 @@ buffer_size = 1
 # Keep only the newest frame (drop older frames when publish lags).
 latest_only = true
 
+[camera_h264]
+enable = false
+width = 640
+height = 480
+fps = 30
+bitrate = 2000000
+chunk_bytes = 65536
+
 [lidar]
 # Optional: LiDAR support (disabled by default)
 enable = true

@@ -11,6 +11,8 @@ Usage and Zenoh connection configuration examples are documented in:
 import argparse
 import json
 import math
+import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -472,6 +474,83 @@ def cmd_camera_latency(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_camera_h264(args: argparse.Namespace) -> int:
+    key_video = _key(args.robot_id, "camera/video/h264")
+    key_meta = _key(args.robot_id, "camera/video/h264/meta")
+    session = args.open_session()
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = threading.Lock()
+    out_fp = out_path.open("wb")
+    play_state: dict[str, Optional[object]] = {"stdin": None}
+
+    if args.play:
+        ffplay = shutil.which("ffplay")
+        if not ffplay:
+            print("ffplay not found; install ffmpeg to use --play")
+        else:
+            cmd = [
+                ffplay,
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
+                "-an",
+                "-i",
+                "pipe:0",
+            ]
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                play_state["proc"] = proc
+                play_state["stdin"] = proc.stdin
+            except Exception as e:
+                print(f"failed to start ffplay: {e}")
+
+    def on_video(sample: Any) -> None:
+        payload = sample.payload.to_bytes()
+        with lock:
+            out_fp.write(payload)
+            if args.flush:
+                out_fp.flush()
+            stdin = play_state.get("stdin")
+            if stdin:
+                try:
+                    stdin.write(payload)
+                    if args.flush:
+                        stdin.flush()
+                except BrokenPipeError:
+                    play_state["stdin"] = None
+
+    def on_meta(sample: Any) -> None:
+        if not args.print_meta:
+            return
+        try:
+            meta = _decode_json_payload(sample)
+            print("meta:", json.dumps(meta, ensure_ascii=False))
+        except Exception:
+            return
+
+    sub_video = session.declare_subscriber(key_video, on_video)
+    sub_meta = session.declare_subscriber(key_meta, on_meta)
+    try:
+        input("subscribing camera h264... press Enter to quit\n")
+    finally:
+        sub_video.undeclare()
+        sub_meta.undeclare()
+        session.close()
+        with lock:
+            out_fp.close()
+            proc = play_state.get("proc")
+            if isinstance(proc, subprocess.Popen):
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+    print(f"saved: {out_path}")
+    return 0
+
+
 def cmd_lidar(args: argparse.Namespace) -> int:
     key_scan = _key(args.robot_id, "lidar/scan")
     key_front = _key(args.robot_id, "lidar/front")
@@ -609,6 +688,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     cam.add_argument("--out-dir", type=Path, default=Path("./camera_frames"))
     cam.add_argument("--print-meta", action="store_true")
     cam.set_defaults(func=cmd_camera)
+
+    cam_h264 = sub.add_parser("camera-h264", help="Subscribe camera/video/h264 and save stream")
+    cam_h264.add_argument("--out", type=str, default="./camera_stream.h264")
+    cam_h264.add_argument("--print-meta", action="store_true")
+    cam_h264.add_argument("--flush", action="store_true", help="Flush after each write")
+    cam_h264.add_argument("--play", action="store_true", help="Play stream with ffplay (requires ffmpeg)")
+    cam_h264.set_defaults(func=cmd_camera_h264)
 
     cam_latency = sub.add_parser("camera-latency", help="Subscribe camera/meta and report latency stats")
     cam_latency.add_argument(

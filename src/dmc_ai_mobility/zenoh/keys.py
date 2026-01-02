@@ -35,6 +35,14 @@ def camera_meta(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/camera/meta"
 
 
+def camera_video_h264(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/camera/video/h264"
+
+
+def camera_video_h264_meta(robot_id: str) -> str:
+    return f"{_robot_prefix(robot_id)}/camera/video/h264/meta"
+
+
 def health_state(robot_id: str) -> str:
     return f"{_robot_prefix(robot_id)}/health/state"
 

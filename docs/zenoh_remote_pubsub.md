@@ -17,7 +17,7 @@
 最小操作スクリプト:
 
 - `examples/remote_zenoh_tool.py`（このリポジトリに同梱）
-  - `motor/stop/oled/imu/camera/lidar` のサブコマンドを提供します
+- `motor/stop/oled/imu/camera/camera-h264/lidar` のサブコマンドを提供します
 
 ## ネットワーク構成（おすすめ）
 
@@ -270,6 +270,30 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
 
     python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
       --duration-s 30 --plot --plot-out ./camera_latency.png
+
+## 4c) camera H.264 を Subscribe（Annex B ストリーム保存）
+
+ロボットが publish しているキー:
+- H.264: `dmc_robo/<robot_id>/camera/video/h264`
+- meta: `dmc_robo/<robot_id>/camera/video/h264/meta`
+
+実行例（ストリーム保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --out ./camera_stream.h264 --print-meta
+
+実行例（リアルタイム表示）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --play --flush
+
+補足:
+- H.264 配信はロボット側で `libcamera-vid` を使用します。
+- `--play` は `ffplay` が必要です（ffmpeg に含まれます）。
+
+再生例（保存後）:
+
+    ffplay -fflags nobuffer -flags low_delay -an ./camera_stream.h264
 
 ## 5) lidar を Subscribe（角度ごとの生値 / 正面サマリ）
 

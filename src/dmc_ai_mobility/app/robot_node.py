@@ -11,6 +11,11 @@ from dmc_ai_mobility.core.config import RobotConfig
 from dmc_ai_mobility.core.oled_bitmap import load_oled_asset_mono1, mono1_buf_len
 from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd
+from dmc_ai_mobility.drivers.camera_h264 import (
+    LibcameraH264Config,
+    LibcameraH264Driver,
+    MockH264Driver,
+)
 from dmc_ai_mobility.drivers.camera_v4l2 import (
     CameraFrame,
     MockCameraDriver,
@@ -90,8 +95,15 @@ def run_robot(
     imu = MockImuDriver()
     oled = MockOledDriver()
     camera = MockCameraDriver(width=config.camera.width, height=config.camera.height)
+    h264_driver: Optional[LibcameraH264Driver | MockH264Driver] = None
     lidar = MockLidarDriver()
     lidar_enabled = bool(config.lidar.enable)
+
+    if dry_run and config.camera_h264.enable:
+        h264_driver = MockH264Driver(
+            fps=config.camera_h264.fps,
+            chunk_bytes=config.camera_h264.chunk_bytes,
+        )
 
     if not dry_run:
         try:
@@ -120,6 +132,21 @@ def run_robot(
             except Exception as e:
                 logger.warning("camera driver unavailable; disabling camera (%s)", e)
                 no_camera = True
+
+        if config.camera_h264.enable:
+            try:
+                h264_driver = LibcameraH264Driver(
+                    LibcameraH264Config(
+                        width=config.camera_h264.width,
+                        height=config.camera_h264.height,
+                        fps=config.camera_h264.fps,
+                        bitrate=config.camera_h264.bitrate,
+                        chunk_bytes=config.camera_h264.chunk_bytes,
+                    )
+                )
+            except Exception as e:
+                logger.warning("camera h264 driver unavailable; disabling h264 (%s)", e)
+                h264_driver = None
 
         try:
             oled = Ssd1306OledDriver(
@@ -472,6 +499,45 @@ def run_robot(
             camera_thread = threading.Thread(target=camera_loop, name="camera_loop", daemon=True)
             camera_thread.start()
 
+    h264_thread: Optional[threading.Thread] = None
+    if h264_driver is not None:
+        def h264_loop() -> None:
+            logger.info(
+                "camera h264 started (%sx%s @ %.1ffps, bitrate=%s)",
+                config.camera_h264.width,
+                config.camera_h264.height,
+                config.camera_h264.fps,
+                config.camera_h264.bitrate,
+            )
+            key_video = keys.camera_video_h264(robot_id)
+            key_meta = keys.camera_video_h264_meta(robot_id)
+            seq = 0
+            while not stop_event.is_set():
+                chunk = h264_driver.read_chunk()
+                if chunk is None:
+                    break
+                if not chunk:
+                    continue
+                session.publish(key_video, chunk)
+                publish_json(
+                    session,
+                    key_meta,
+                    {
+                        "codec": "h264",
+                        "width": config.camera_h264.width,
+                        "height": config.camera_h264.height,
+                        "fps": config.camera_h264.fps,
+                        "bitrate": config.camera_h264.bitrate,
+                        "seq": seq,
+                        "ts_ms": wall_clock_ms(),
+                        "bytes": len(chunk),
+                    },
+                )
+                seq += 1
+
+        h264_thread = threading.Thread(target=h264_loop, name="camera_h264_loop", daemon=True)
+        h264_thread.start()
+
     lidar_thread: Optional[threading.Thread] = None
     if lidar_enabled:
         def lidar_loop() -> None:
@@ -555,6 +621,11 @@ def run_robot(
             except Exception:
                 pass
             try:
+                if h264_driver is not None:
+                    h264_driver.close()
+            except Exception:
+                pass
+            try:
                 lidar.close()
             except Exception:
                 pass
@@ -577,6 +648,8 @@ def run_robot(
         camera_thread.join(timeout=1.0)
     if camera_capture_thread and camera_capture_thread.is_alive():
         camera_capture_thread.join(timeout=1.0)
+    if h264_thread and h264_thread.is_alive():
+        h264_thread.join(timeout=1.0)
     if lidar_thread and lidar_thread.is_alive():
         lidar_thread.join(timeout=1.0)
 

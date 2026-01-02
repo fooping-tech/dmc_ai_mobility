@@ -91,3 +91,17 @@ CAMERA_META_SCHEMA = {
         "read_ms": "int (capture read duration ms)",
     },
 }
+
+CAMERA_H264_META_SCHEMA = {
+    "key": "dmc_robo/<robot_id>/camera/video/h264/meta",
+    "json": {
+        "codec": "string (h264)",
+        "width": "int",
+        "height": "int",
+        "fps": "number",
+        "bitrate": "int",
+        "seq": "int",
+        "ts_ms": "int (publish epoch ms)",
+        "bytes": "int (payload size)",
+    },
+}

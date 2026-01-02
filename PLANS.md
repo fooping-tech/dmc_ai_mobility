@@ -382,6 +382,153 @@ Update Note: Added graph output requirement for the remote latency tool, documen
 Update Note: Extended the planned camera/meta fields to include capture start/end timing and read_ms for capture-start-based latency measurement.
 Update Note: Updated the plan language to publish→receive latency to match the current remote tool output.
 
+## ExecPlan: Add H.264 camera stream (libcamera-vid)
+
+This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+
+This plan follows `PLANS.md` at the repository root. It also incorporates the relevant design details from `docs/dmc_ai_mobility_software_design.md`.
+
+## Purpose / Big Picture
+
+Provide an optional H.264 camera stream that uses Raspberry Pi hardware encoding via `libcamera-vid`. This reduces CPU load compared to software JPEG encoding while preserving the existing JPEG path for compatibility.
+
+## Progress
+
+- [x] (2026-01-02) Add H.264 config section and config parsing.
+- [x] (2026-01-02) Implement libcamera-vid H.264 driver and dry-run mock path.
+- [x] (2026-01-02) Publish H.264 stream and metadata via new Zenoh keys.
+- [x] (2026-01-02) Add remote subscribe tool to save H.264 stream.
+- [x] (2026-01-02) Update docs and schemas.
+- [ ] (2026-01-02) Validate on Raspberry Pi hardware.
+
+## Surprises & Discoveries
+
+- Observation: H.264 stream output is a continuous Annex B byte stream; chunking is required for Zenoh payloads.
+  Evidence: libcamera-vid outputs to stdout when `-o -` is used.
+
+## Decision Log
+
+- Decision: Use `libcamera-vid` as the H.264 encoder backend.
+  Rationale: Uses Raspberry Pi hardware encoding with minimal CPU overhead and no extra Python dependencies.
+  Date/Author: 2026-01-02 / Codex
+
+- Decision: Publish H.264 as chunked Annex B bytes on a new key.
+  Rationale: Keeps JPEG path intact and avoids breaking existing consumers.
+  Date/Author: 2026-01-02 / Codex
+
+- Decision: Provide a dry-run mock driver for H.264.
+  Rationale: Ensures a no-hardware validation path exists as required by repository conventions.
+  Date/Author: 2026-01-02 / Codex
+
+## Outcomes & Retrospective
+
+At completion:
+
+- Optional H.264 stream is available under `camera/video/h264`.
+- JPEG stream remains unchanged for compatibility.
+- Remote tool can save the H.264 stream to a `.h264` file.
+
+## Context and Orientation
+
+Runtime environment:
+
+- Raspberry Pi OS, Python 3.x, systemd (per `docs/dmc_ai_mobility_software_design.md`).
+
+Camera publishing today:
+
+- JPEG bytes are published to `dmc_robo/<robot_id>/camera/image/jpeg`.
+- JSON metadata is published to `dmc_robo/<robot_id>/camera/meta`.
+
+New H.264 publishing:
+
+- H.264 chunk bytes are published to `dmc_robo/<robot_id>/camera/video/h264`.
+- JSON metadata is published to `dmc_robo/<robot_id>/camera/video/h264/meta`.
+
+Key files:
+
+- `src/dmc_ai_mobility/drivers/camera_h264.py` (libcamera-vid H.264 driver).
+- `src/dmc_ai_mobility/app/robot_node.py` (camera publish loop).
+- `examples/remote_zenoh_tool.py` (remote subscriber).
+- `docs/keys_and_payloads.md`, `docs/zenoh_remote_pubsub.md` (documentation).
+
+Terms:
+
+- “Annex B”: raw H.264 byte stream format using start codes (0x00000001).
+- “Chunk”: a fixed-size slice of the H.264 byte stream for Zenoh publishing.
+
+## Plan of Work
+
+1) Add `[camera_h264]` configuration and parsing.
+2) Implement libcamera-vid H.264 driver and mock fallback.
+3) Publish H.264 bytes and metadata on new Zenoh keys.
+4) Add a remote tool command to save H.264 stream.
+5) Update schemas and docs.
+6) Validate on hardware; verify CPU drop and stream playback.
+
+## Concrete Steps
+
+1) Enable H.264 in `config.toml`:
+
+    [camera_h264]
+    enable = true
+    width = 640
+    height = 480
+    fps = 30
+    bitrate = 2000000
+    chunk_bytes = 65536
+
+2) Restart service:
+
+    sudo systemctl restart dmc-ai-mobility.service
+
+3) Subscribe and save:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --out ./camera_stream.h264 --print-meta
+
+4) Play back the saved stream:
+
+    ffplay -fflags nobuffer -flags low_delay -an ./camera_stream.h264
+
+## Validation and Acceptance
+
+No-hardware:
+
+- Run with `--dry-run` and `camera_h264.enable = true`; confirm dry-run publishes H.264 payloads.
+
+Hardware:
+
+- H.264 stream is saved and playable with `ffplay`.
+- CPU utilization drops compared to JPEG-only streaming.
+
+## Idempotence and Recovery
+
+- Disable H.264 by setting `[camera_h264].enable = false`.
+- JPEG path remains unchanged and can be used if H.264 fails.
+
+## Artifacts and Notes
+
+Example meta payload:
+
+    {
+      "codec": "h264",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "bitrate": 2000000,
+      "seq": 10,
+      "ts_ms": 1735467890123,
+      "bytes": 65536
+    }
+
+## Interfaces and Dependencies
+
+- `LibcameraH264Driver` in `src/dmc_ai_mobility/drivers/camera_h264.py`.
+- New keys: `camera/video/h264` and `camera/video/h264/meta` in `src/dmc_ai_mobility/zenoh/keys.py`.
+- Optional dependency: `libcamera-vid` (libcamera-apps).
+
+Update Note: Added ExecPlan for H.264 camera streaming with libcamera-vid, including config, keys, tooling, and validation.
+
 - The runtime target is Raspberry Pi OS (Linux) with Python 3.x, as described in `docs/dmc_ai_mobility_software_design.md`.
 - Drivers live in `src/dmc_ai_mobility/drivers/` and are used by higher-level nodes (for example `src/dmc_ai_mobility/app/robot_node.py`).
 - LiDAR example: `examples/example_lidar_front_distance.py` (demonstration script; runnable with `--mock`).
