@@ -89,10 +89,12 @@ motor cmd payload（JSON）例:
 
 ## systemd（Raspberry Pi）
 
-`systemd/dmc-ai-mobility.service` は配備例です。`/opt/dmc_ai_mobility` 配下に配置する想定なので、環境に合わせて `WorkingDirectory` 等を調整してください。
+`systemd/dmc-ai-mobility.service` は配備例です。`/home/fooping/dmc_ai_mobility` と venv `/home/fooping/env` を想定しています。環境に合わせて `WorkingDirectory`、`VIRTUAL_ENV`、`PATH`、`ExecStart` を調整してください。
 
 ```bash
-sudo cp -r . /opt/dmc_ai_mobility
+cp -r . /home/fooping/dmc_ai_mobility
+python3 -m venv /home/fooping/env
+/home/fooping/env/bin/pip install -r /home/fooping/dmc_ai_mobility/requirements.txt
 sudo cp systemd/dmc-ai-mobility.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now dmc-ai-mobility.service

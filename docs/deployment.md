@@ -5,11 +5,20 @@
 ## 1) 配備
 
 ```bash
-sudo cp -r . /opt/dmc_ai_mobility
-cd /opt/dmc_ai_mobility
+APP_DIR=/home/fooping/dmc_ai_mobility
+mkdir -p "$APP_DIR"
+cp -r . "$APP_DIR"
+cd "$APP_DIR"
 ```
 
-## 2) systemd 登録
+## 2) venv 作成
+
+```bash
+python3 -m venv /home/fooping/env
+/home/fooping/env/bin/pip install -r requirements.txt
+```
+
+## 3) systemd 登録
 
 ```bash
 sudo cp systemd/dmc-ai-mobility.service /etc/systemd/system/
@@ -17,14 +26,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now dmc-ai-mobility.service
 ```
 
-## 3) 動作確認
+## 4) 動作確認
 
 ```bash
 sudo systemctl status dmc-ai-mobility.service
 journalctl -u dmc-ai-mobility.service -f
 ```
 
-## 4) 設定変更時
+## 5) 設定変更時
 
 `config.toml` を変更したら再起動します。
 
@@ -32,7 +41,7 @@ journalctl -u dmc-ai-mobility.service -f
 sudo systemctl restart dmc-ai-mobility.service
 ```
 
-## 5) Git 更新と安全な再起動
+## 6) Git 更新と安全な再起動
 
 リモート更新がある場合のみ `git pull --ff-only` を行い、稼働中のサービスを安全に再起動します。
 
@@ -49,4 +58,5 @@ sudo ./scripts/pull_and_restart.sh
 
 - systemd は `scripts/run_robot.sh` を起動します（`libcamerify` 自動対応）。
 - `scripts/run_robot.sh` は `libcamerify` があれば自動使用します（無効化: `DMC_USE_LIBCAMERIFY=0`）。
-- `config.toml` は `/opt/dmc_ai_mobility/config.toml` を想定しています。
+- `config.toml` は `/home/fooping/dmc_ai_mobility/config.toml` を想定しています。
+- venv のパスを変える場合は `systemd/dmc-ai-mobility.service` の `VIRTUAL_ENV` と `PATH` を合わせて変更してください。

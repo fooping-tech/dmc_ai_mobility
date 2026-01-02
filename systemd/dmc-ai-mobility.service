@@ -5,9 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/dmc_ai_mobility
-Environment=PYTHONPATH=/opt/dmc_ai_mobility/src
-ExecStart=/opt/dmc_ai_mobility/scripts/run_robot.sh /opt/dmc_ai_mobility/config.toml
+WorkingDirectory=/home/fooping/dmc_ai_mobility
+Environment=VIRTUAL_ENV=/home/fooping/env
+Environment=PATH=/home/fooping/env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/home/fooping/dmc_ai_mobility/src
+ExecStart=/home/fooping/dmc_ai_mobility/scripts/run_robot.sh /home/fooping/dmc_ai_mobility/config.toml
 Restart=on-failure
 RestartSec=2
 
