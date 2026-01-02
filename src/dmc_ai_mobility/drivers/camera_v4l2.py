@@ -60,6 +60,7 @@ class OpenCVCameraConfig:
     height: int = 480
     auto_trim: bool = False
     buffer_size: int = 0
+    jpeg_quality: Optional[int] = None
 
 
 class OpenCVCameraDriver:
@@ -74,6 +75,7 @@ class OpenCVCameraDriver:
         self._height = config.height
         self._auto_trim = bool(config.auto_trim)
         self._buffer_size = int(config.buffer_size)
+        self._jpeg_quality = config.jpeg_quality
         self._trim_logged = False
         self._cap = self._open_capture()
         self._fail_count = 0
@@ -187,7 +189,14 @@ class OpenCVCameraDriver:
                 )
                 self._trim_logged = True
 
-        ok, buf = self._cv2.imencode(".jpg", frame)
+        encode_params = None
+        if self._jpeg_quality is not None:
+            quality = max(1, min(100, int(self._jpeg_quality)))
+            encode_params = [int(self._cv2.IMWRITE_JPEG_QUALITY), quality]
+        if encode_params:
+            ok, buf = self._cv2.imencode(".jpg", frame, encode_params)
+        else:
+            ok, buf = self._cv2.imencode(".jpg", frame)
         if not ok:
             logger.warning("camera jpeg encode failed")
             return None

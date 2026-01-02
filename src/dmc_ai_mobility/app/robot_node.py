@@ -114,6 +114,7 @@ def run_robot(
                         height=config.camera.height,
                         auto_trim=config.camera.auto_trim,
                         buffer_size=config.camera.buffer_size,
+                        jpeg_quality=config.camera.jpeg_quality,
                     )
                 )
             except Exception as e:

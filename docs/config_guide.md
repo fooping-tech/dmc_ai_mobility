@@ -37,6 +37,7 @@ robot_id = "rasp-zero-01"
 - `auto_trim`: 要求サイズより大きいフレームが返る場合に右/下をトリムする
 - `buffer_size`: 内部バッファサイズ（小さくすると遅延を減らせる場合あり）
 - `latest_only`: 最新フレームのみ保持し、遅延を溜めない
+- `jpeg_quality`: JPEG エンコード品質（1-100、低いほど軽い）
 
 ## [lidar]
 
@@ -80,4 +81,5 @@ fps = 10
 auto_trim = true
 buffer_size = 1
 latest_only = true
+jpeg_quality = 80
 ```

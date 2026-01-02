@@ -52,6 +52,7 @@ class CameraConfig:
     auto_trim: bool = False
     buffer_size: int = 0
     latest_only: bool = False
+    jpeg_quality: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,15 @@ def _optional_str(value: Any) -> Optional[str]:
         return None
     text = str(value)
     return text if text else None
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
 
 
 def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> RobotConfig:
@@ -145,6 +155,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             auto_trim=bool(camera.get("auto_trim", CameraConfig.auto_trim)),
             buffer_size=int(camera.get("buffer_size", CameraConfig.buffer_size)),
             latest_only=bool(camera.get("latest_only", CameraConfig.latest_only)),
+            jpeg_quality=_optional_int(camera.get("jpeg_quality")),
         ),
         lidar=LidarConfig(
             enable=bool(lidar.get("enable", LidarConfig.enable)),
