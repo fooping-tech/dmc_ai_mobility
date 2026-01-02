@@ -10,6 +10,7 @@ Zenoh を通信基盤とし、以下を扱います。
 - OLED 表示
 - カメラ画像配信
 - 本番常駐運用（systemd）
+- Git 更新と安全な再起動は `scripts/pull_and_restart.sh` を使用
 
 ## まず読む
 - [Software Design](dmc_ai_mobility_software_design.md)
