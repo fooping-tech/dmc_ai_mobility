@@ -18,7 +18,18 @@ python3 -m venv /home/fooping/env
 /home/fooping/env/bin/pip install -r requirements.txt
 ```
 
-## 3) systemd 登録
+## 3) 依存パッケージ（H.264 配信を使う場合）
+
+```bash
+sudo apt-get update
+sudo apt-get install -y rpicam-apps
+```
+
+補足:
+- Debian bookworm は `rpicam-vid`（rpicam-apps）を使用します。
+- 旧環境では `libcamera-vid`（libcamera-apps）を使う場合があります。
+
+## 4) systemd 登録
 
 ```bash
 sudo cp systemd/dmc-ai-mobility.service /etc/systemd/system/
@@ -26,7 +37,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now dmc-ai-mobility.service
 ```
 
-## 4) 動作確認
+## 5) 動作確認
 
 ```bash
 sudo systemctl status dmc-ai-mobility.service
@@ -35,7 +46,7 @@ journalctl -u dmc-ai-mobility.service -f
 
 ログの追従は `journalctl -u dmc-ai-mobility.service -f` で確認できます。
 
-## 5) 設定変更時
+## 6) 設定変更時
 
 `config.toml` を変更したら再起動します。
 
@@ -43,7 +54,7 @@ journalctl -u dmc-ai-mobility.service -f
 sudo systemctl restart dmc-ai-mobility.service
 ```
 
-## 6) Git 更新と安全な再起動
+## 7) Git 更新と安全な再起動
 
 リモート更新がある場合のみ `git pull --ff-only` を行い、稼働中のサービスを安全に再起動します。
 

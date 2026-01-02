@@ -45,7 +45,7 @@ robot_id = "rasp-zero-01"
 - `width`/`height`/`fps`: H.264 の解像度とフレームレート
 - `bitrate`: H.264 のビットレート（bps）
 - `chunk_bytes`: 送信チャンクサイズ（bytes）
-- `libcamera-vid` が必要です（Raspberry Pi OS の libcamera-apps で提供）
+- `rpicam-vid` が必要です（bookworm の rpicam-apps）。旧環境は `libcamera-vid` の場合があります。
 
 ## [lidar]
 

@@ -148,7 +148,7 @@ dmc_robo/<robot_id>/<component>/<direction>
 - libcamerify により V4L2 デバイスとして取得
 - OpenCV（cv2.VideoCapture）を使用
 - JPEG エンコード後 Zenoh で Publish
-- オプションで libcamera-vid による H.264 ハードウェアエンコード配信を利用可能
+- オプションで rpicam-vid（bookworm）/libcamera-vid による H.264 ハードウェアエンコード配信を利用可能
 
 ---
 

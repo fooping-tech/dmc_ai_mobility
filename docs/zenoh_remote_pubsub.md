@@ -288,8 +288,9 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
       --play --flush
 
 補足:
-- H.264 配信はロボット側で `libcamera-vid` を使用します。
+- H.264 配信はロボット側で `rpicam-vid` を使用します（bookworm）。
 - `--play` は `ffplay` が必要です（ffmpeg に含まれます）。
+- 低遅延を優先する場合は `--flush` を付けてください。
 
 再生例（保存後）:
 

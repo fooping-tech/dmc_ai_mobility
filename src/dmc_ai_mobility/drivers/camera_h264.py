@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import select
+import shutil
 import subprocess
 import threading
 import time
@@ -33,8 +34,13 @@ class LibcameraH264Driver:
         self._start_process()
 
     def _start_process(self) -> None:
+        cmd_name = shutil.which("rpicam-vid") or shutil.which("libcamera-vid")
+        if not cmd_name:
+            raise RuntimeError(
+                "rpicam-vid/libcamera-vid not found; install rpicam-apps (bookworm) or libcamera-apps"
+            )
         cmd = [
-            "libcamera-vid",
+            cmd_name,
             "--codec",
             "h264",
             "--inline",
@@ -52,16 +58,13 @@ class LibcameraH264Driver:
         ]
         if self._bitrate > 0:
             cmd.extend(["--bitrate", str(self._bitrate)])
-        logger.info("starting libcamera-vid: %s", " ".join(cmd))
-        try:
-            self._proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0,
-            )
-        except FileNotFoundError as e:
-            raise RuntimeError("libcamera-vid not found; install libcamera-apps") from e
+        logger.info("starting camera encoder: %s", " ".join(cmd))
+        self._proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
 
         if self._proc.stderr:
             self._stderr_thread = threading.Thread(
