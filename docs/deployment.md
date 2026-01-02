@@ -33,6 +33,8 @@ sudo systemctl status dmc-ai-mobility.service
 journalctl -u dmc-ai-mobility.service -f
 ```
 
+ログの追従は `journalctl -u dmc-ai-mobility.service -f` で確認できます。
+
 ## 5) 設定変更時
 
 `config.toml` を変更したら再起動します。
