@@ -247,19 +247,41 @@ def _plot_latency(samples: list[dict[str, Any]], *, title: str | None, out_path:
         return
 
     xs: list[float] = []
+    read_ms: list[float] = []
     pipeline: list[float] = []
-    e2e: list[float] = []
+    start_to_publish: list[float] = []
+    publish_to_remote: list[float] = []
     for idx, sample in enumerate(samples):
         seq = sample.get("seq")
         xs.append(float(seq) if seq is not None else float(idx))
+        read_val = sample.get("read_ms")
         pipeline_val = sample.get("pipeline_ms")
-        e2e_val = sample.get("end_to_end_ms")
-        pipeline.append(float(pipeline_val) if pipeline_val is not None else math.nan)
-        e2e.append(float(e2e_val) if e2e_val is not None else math.nan)
+        start_to_publish_val = sample.get("start_to_publish_ms")
+        publish_to_remote_val = sample.get("publish_to_remote_ms")
+        read_num = float(read_val) if read_val is not None else math.nan
+        pipeline_num = float(pipeline_val) if pipeline_val is not None else math.nan
+        start_num = float(start_to_publish_val) if start_to_publish_val is not None else math.nan
+        publish_remote_num = (
+            float(publish_to_remote_val) if publish_to_remote_val is not None else math.nan
+        )
+        read_ms.append(read_num)
+        pipeline.append(pipeline_num)
+        start_to_publish.append(start_num)
+        publish_to_remote.append(publish_remote_num)
 
     fig, ax = plt.subplots()
-    ax.plot(xs, pipeline, label="pipeline_ms")
-    ax.plot(xs, e2e, label="end_to_end_ms")
+    stack_read = [0.0 if math.isnan(v) else v for v in read_ms]
+    stack_pipeline = [0.0 if math.isnan(v) else v for v in pipeline]
+    stack_publish_remote = [0.0 if math.isnan(v) else v for v in publish_to_remote]
+    series = [stack_read, stack_pipeline]
+    labels = ["read_ms", "pipeline_ms"]
+    if any(v > 0 for v in stack_publish_remote):
+        series.append(stack_publish_remote)
+        labels.append("publish_to_remote_ms")
+    if any(v > 0 for v in stack_read) or any(v > 0 for v in stack_pipeline) or any(v > 0 for v in stack_publish_remote):
+        ax.stackplot(xs, series, labels=labels, alpha=0.5)
+    if any(not math.isnan(v) for v in start_to_publish):
+        ax.plot(xs, start_to_publish, label="start_to_publish_ms", color="black", linewidth=1.2)
     ax.set_xlabel("seq")
     ax.set_ylabel("ms")
     ax.grid(True, linestyle="--", alpha=0.4)
@@ -363,19 +385,32 @@ def cmd_camera_latency(args: argparse.Namespace) -> int:
         except Exception:
             return
 
+        # 受信時刻（publish->remote の推定に使用）
         recv_ts_ms = int(time.time() * 1000)
         capture_ts_ms = _to_int(meta.get("capture_ts_ms"))
+        publish_ts_ms = _to_int(meta.get("publish_ts_ms"))
+        capture_start_mono_ms = _to_int(meta.get("capture_start_mono_ms"))
+        publish_mono_ms = _to_int(meta.get("publish_mono_ms"))
         pipeline_ms = _to_float(meta.get("pipeline_ms"))
-        end_to_end_ms = None
-        if capture_ts_ms is not None:
-            end_to_end_ms = float(recv_ts_ms - capture_ts_ms)
+        read_ms = _to_float(meta.get("read_ms"))
+        publish_to_remote_ms = None
+        if publish_ts_ms is not None:
+            publish_to_remote_ms = float(recv_ts_ms - publish_ts_ms)
+        start_to_publish_ms = None
+        if read_ms is not None and pipeline_ms is not None:
+            start_to_publish_ms = read_ms + pipeline_ms
+        elif capture_start_mono_ms is not None and publish_mono_ms is not None:
+            start_to_publish_ms = float(publish_mono_ms - capture_start_mono_ms)
 
         entry = {
             "seq": _to_int(meta.get("seq")),
             "capture_ts_ms": capture_ts_ms,
+            "publish_ts_ms": publish_ts_ms,
             "recv_ts_ms": recv_ts_ms,
+            "read_ms": read_ms,
             "pipeline_ms": pipeline_ms,
-            "end_to_end_ms": end_to_end_ms,
+            "publish_to_remote_ms": publish_to_remote_ms,
+            "start_to_publish_ms": start_to_publish_ms,
         }
 
         with lock:
@@ -384,8 +419,9 @@ def cmd_camera_latency(args: argparse.Namespace) -> int:
 
         if args.print_each:
             print(
-                "seq={seq} pipeline_ms={pipeline_ms} end_to_end_ms={end_to_end_ms} "
-                "capture_ts_ms={capture_ts_ms} recv_ts_ms={recv_ts_ms}".format(**entry)
+                "seq={seq} read_ms={read_ms} pipeline_ms={pipeline_ms} "
+                "start_to_publish_ms={start_to_publish_ms} publish_to_remote_ms={publish_to_remote_ms} "
+                "publish_ts_ms={publish_ts_ms} recv_ts_ms={recv_ts_ms}".format(**entry)
             )
 
         if args.max_samples > 0 and sample_count >= args.max_samples:
@@ -412,11 +448,23 @@ def cmd_camera_latency(args: argparse.Namespace) -> int:
     with lock:
         snapshot = list(samples)
 
+    read_vals = [s["read_ms"] for s in snapshot if isinstance(s.get("read_ms"), (int, float))]
     pipeline_vals = [s["pipeline_ms"] for s in snapshot if isinstance(s.get("pipeline_ms"), (int, float))]
-    e2e_vals = [s["end_to_end_ms"] for s in snapshot if isinstance(s.get("end_to_end_ms"), (int, float))]
+    publish_to_remote_vals = [
+        s["publish_to_remote_ms"]
+        for s in snapshot
+        if isinstance(s.get("publish_to_remote_ms"), (int, float))
+    ]
+    start_to_publish_vals = [
+        s["start_to_publish_ms"]
+        for s in snapshot
+        if isinstance(s.get("start_to_publish_ms"), (int, float))
+    ]
 
+    _print_summary("read_ms", read_vals)
     _print_summary("pipeline_ms", pipeline_vals)
-    _print_summary("end_to_end_ms", e2e_vals)
+    _print_summary("start_to_publish_ms", start_to_publish_vals)
+    _print_summary("publish_to_remote_ms", publish_to_remote_vals)
 
     if args.plot or args.plot_out:
         _plot_latency(snapshot, title=args.plot_title, out_path=args.plot_out, show=bool(args.plot))

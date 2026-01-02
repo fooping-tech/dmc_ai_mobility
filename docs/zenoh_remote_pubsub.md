@@ -249,10 +249,11 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
 `camera/meta` の `capture_ts_ms` と受信時刻から end-to-end レイテンシを計測します。  
 `--plot` または `--plot-out` を使う場合は `matplotlib` が必要です（`pip install matplotlib`）。
 
-計測の意味:
+計測の意味（camera-latency の表示項目。グラフは read_ms + pipeline_ms + publish_to_remote_ms を積み上げ表示）:
 - `read_ms`: `cap.read()` の開始→終了（キャプチャ読み取り時間の近似）。
 - `pipeline_ms`: キャプチャ終了→publish（JPEG encode + publish を含む）。
-- `end_to_end_ms`（remote tool）: キャプチャ終了→受信（時計同期が必要）。
+- `start_to_publish_ms`: キャプチャ開始→publish（`read_ms + pipeline_ms`）。
+- `publish_to_remote_ms`（remote tool）: publish→受信（時計同期が必要）。
 - キャプチャ開始→publish を見たい場合は `publish_mono_ms - capture_start_mono_ms` を使います。
 
 実行例（コンソール表示のみ）:

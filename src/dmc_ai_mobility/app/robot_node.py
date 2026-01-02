@@ -364,6 +364,7 @@ def run_robot(
                 if frame:
                     # 画像本体は `camera/image/jpeg` にそのまま bytes を publish（payload は JPEG）。
                     session.publish(key_img, frame.jpeg)
+                    # publish 実行時刻を取得（パイプライン遅延の計測用）
                     publish_wall_ms = wall_clock_ms()
                     publish_mono_ms = monotonic_ms()
                     pipeline_ms = max(0, publish_mono_ms - frame.capture_mono_ms)

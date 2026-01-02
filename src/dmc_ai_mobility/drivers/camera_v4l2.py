@@ -114,11 +114,13 @@ class OpenCVCameraDriver:
         return cap
 
     def read_jpeg(self) -> Optional[CameraFrame]:
+        # cap.read() の開始時刻（キャプチャ開始の近似）
         capture_start_mono_ms = int(time.monotonic() * 1000)
         try:
             ok, frame = self._cap.read()
         except Exception:
             ok, frame = False, None
+        # cap.read() の終了時刻（キャプチャ終了の近似）
         capture_end_mono_ms = int(time.monotonic() * 1000)
         if not ok or frame is None:
             self._fail_count += 1
@@ -148,6 +150,7 @@ class OpenCVCameraDriver:
             return None
         # Successful read: clear transient failure state.
         self._fail_count = 0
+        # 以降のレイテンシ計測はキャプチャ終了時刻を基準にする
         capture_mono_ms = capture_end_mono_ms
         capture_wall_ms = int(time.time() * 1000)
         read_ms = max(0, capture_end_mono_ms - capture_start_mono_ms)
