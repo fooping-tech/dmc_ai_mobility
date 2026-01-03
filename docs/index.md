@@ -33,9 +33,12 @@ Zenoh を通信基盤とし、以下を扱います。
 ## 運用・ガイド
 - [設定ガイド](config_guide.md)
 - [デプロイ手順](deployment.md)
+- [H.264 配信設定マニュアル](h264_streaming.md)
 - [デバッグ診断](debugging.md)
 - [Zenoh 運用](zenoh_operations.md)
 
-camera/meta には capture 開始/終了や read_ms などレイテンシ計測用の追加フィールドが含まれ、`examples/remote_zenoh_tool.py camera-latency` でグラフ出力できます。`config.toml` の `[camera].auto_trim` で黒パディング対策、`buffer_size`/`latest_only`/`jpeg_quality` で遅延低減ができます。H.264 配信は `[camera_h264]` で有効化でき、`rpicam-vid`（bookworm）/`libcamera-vid` を使って配信します。`examples/remote_zenoh_tool.py camera-h264 --play` でリアルタイム表示できます。H.264 検証で libcamerify を無効化する場合は `systemd/dmc-ai-mobility-h264.service` を使います。
+`examples/remote_zenoh_ui.py` は H.264 の受信映像と、ロボット側 JPEG を並べて表示できます（PySide6/pyqtgraph と ffmpeg が必要）。
+
+camera/meta には capture 開始/終了や read_ms などレイテンシ計測用の追加フィールドが含まれ、`examples/remote_zenoh_tool.py camera-latency` でグラフ出力できます。`config.toml` の `[camera].auto_trim` で黒パディング対策、`buffer_size`/`latest_only`/`jpeg_quality` で遅延低減ができます。H.264 配信は `[camera_h264]` で有効化でき、`rpicam-vid`（bookworm）/`libcamera-vid` を使って配信します。`examples/remote_zenoh_tool.py camera-h264 --play` でリアルタイム表示、`--encode-out` でリモート側エンコード保存ができます。H.264 検証で libcamerify を無効化する場合は `systemd/dmc-ai-mobility-h264.service` を使います。
 
 デフォルト配備先は `/home/fooping/dmc_ai_mobility`、venv は `/home/fooping/env` を想定しています。変更する場合は systemd ユニットのパスを合わせて更新してください。

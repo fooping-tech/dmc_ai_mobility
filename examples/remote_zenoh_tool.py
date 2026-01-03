@@ -479,11 +479,15 @@ def cmd_camera_h264(args: argparse.Namespace) -> int:
     key_meta = _key(args.robot_id, "camera/video/h264/meta")
     session = args.open_session()
 
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     lock = threading.Lock()
-    out_fp = out_path.open("wb")
+    out_fp = None
+    out_path = None
+    if not args.no_raw:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_fp = out_path.open("wb")
     play_state: dict[str, Optional[object]] = {"stdin": None}
+    encode_state: dict[str, Optional[object]] = {"stdin": None}
 
     if args.play:
         ffplay = shutil.which("ffplay")
@@ -507,12 +511,46 @@ def cmd_camera_h264(args: argparse.Namespace) -> int:
             except Exception as e:
                 print(f"failed to start ffplay: {e}")
 
+    if args.encode_out:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            print("ffmpeg not found; install ffmpeg to use --encode-out")
+        else:
+            encode_path = Path(args.encode_out)
+            encode_path.parent.mkdir(parents=True, exist_ok=True)
+            cmd = [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "h264",
+                "-i",
+                "pipe:0",
+                "-an",
+                "-c:v",
+                args.encode_codec,
+            ]
+            if args.encode_codec == "libx264":
+                cmd.extend(["-preset", "veryfast", "-tune", "zerolatency"])
+            if encode_path.suffix.lower() in {".mp4", ".mov"}:
+                cmd.extend(["-movflags", "+faststart"])
+            cmd.append(str(encode_path))
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                encode_state["proc"] = proc
+                encode_state["stdin"] = proc.stdin
+            except Exception as e:
+                print(f"failed to start ffmpeg: {e}")
+
     def on_video(sample: Any) -> None:
         payload = sample.payload.to_bytes()
         with lock:
-            out_fp.write(payload)
-            if args.flush:
-                out_fp.flush()
+            if out_fp:
+                out_fp.write(payload)
+                if args.flush:
+                    out_fp.flush()
             stdin = play_state.get("stdin")
             if stdin:
                 try:
@@ -521,6 +559,14 @@ def cmd_camera_h264(args: argparse.Namespace) -> int:
                         stdin.flush()
                 except BrokenPipeError:
                     play_state["stdin"] = None
+            encode_stdin = encode_state.get("stdin")
+            if encode_stdin:
+                try:
+                    encode_stdin.write(payload)
+                    if args.flush:
+                        encode_stdin.flush()
+                except BrokenPipeError:
+                    encode_state["stdin"] = None
 
     def on_meta(sample: Any) -> None:
         if not args.print_meta:
@@ -540,14 +586,30 @@ def cmd_camera_h264(args: argparse.Namespace) -> int:
         sub_meta.undeclare()
         session.close()
         with lock:
-            out_fp.close()
+            if out_fp:
+                out_fp.close()
             proc = play_state.get("proc")
             if isinstance(proc, subprocess.Popen):
                 try:
                     proc.terminate()
                 except Exception:
                     pass
-    print(f"saved: {out_path}")
+            proc = encode_state.get("proc")
+            if isinstance(proc, subprocess.Popen):
+                try:
+                    encode_stdin = encode_state.get("stdin")
+                    if encode_stdin:
+                        encode_stdin.close()
+                    proc.wait(timeout=2.0)
+                except Exception:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+    if out_path:
+        print(f"saved: {out_path}")
+    if args.encode_out:
+        print(f"encoded: {args.encode_out}")
     return 0
 
 
@@ -691,9 +753,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     cam_h264 = sub.add_parser("camera-h264", help="Subscribe camera/video/h264 and save stream")
     cam_h264.add_argument("--out", type=str, default="./camera_stream.h264")
+    cam_h264.add_argument("--no-raw", action="store_true", help="Do not save raw .h264 stream")
     cam_h264.add_argument("--print-meta", action="store_true")
     cam_h264.add_argument("--flush", action="store_true", help="Flush after each write")
     cam_h264.add_argument("--play", action="store_true", help="Play stream with ffplay (requires ffmpeg)")
+    cam_h264.add_argument("--encode-out", type=str, default=None, help="Transcode to a file via ffmpeg")
+    cam_h264.add_argument("--encode-codec", type=str, default="libx264")
     cam_h264.set_defaults(func=cmd_camera_h264)
 
     cam_latency = sub.add_parser("camera-latency", help="Subscribe camera/meta and report latency stats")

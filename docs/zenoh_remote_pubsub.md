@@ -287,9 +287,20 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
     python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
       --play --flush
 
+実行例（リモート側でエンコードして保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --encode-out ./camera_stream.mp4 --flush
+
+実行例（生の .h264 を保存せず、再生/エンコードのみ）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --no-raw --play --encode-out ./camera_stream.mp4 --flush
+
 補足:
 - H.264 配信はロボット側で `rpicam-vid` を使用します（bookworm）。
 - `--play` は `ffplay` が必要です（ffmpeg に含まれます）。
+- `--encode-out` は `ffmpeg` が必要です。
 - 低遅延を優先する場合は `--flush` を付けてください。
 
 再生例（保存後）:

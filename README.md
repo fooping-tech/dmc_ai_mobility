@@ -50,6 +50,18 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli robot --config ./config.toml -
 PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml --dry-run
 ```
 
+## Remote UI
+
+`examples/remote_zenoh_ui.py` は Zenoh 経由の操作 UI です。H.264 の受信映像と JPEG を並べて表示します。
+
+```bash
+python3 -m pip install PySide6 pyqtgraph
+python3 examples/remote_zenoh_ui.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5
+```
+
+補足:
+- H.264 表示には `ffmpeg` が必要です。
+
 ## 設定（config.toml）
 
 `config.toml` を編集します（例は `config.toml` にあります）。
