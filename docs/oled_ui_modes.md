@@ -62,6 +62,8 @@ python3 examples/remote_zenoh_tool.py \
 `welcome` / `mode_switch` / `eyes` はフォルダ内のフレーム列として読み込みます。  
 `.bin` でも画像（png/jpg）でも OK です。ファイル名順で再生されます。
 
+フレーム作成は GUI エディタ（`docs/oled_anim_editor.md`）か CLI（`tools/oled_preview/render_oled_sequence.py`）で行えます。
+
 例:
 
 ```

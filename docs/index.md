@@ -38,6 +38,7 @@ Zenoh を通信基盤とし、以下を扱います。
 - [Zenoh 運用](zenoh_operations.md)
 - [OLED bitmap プレビュー](oled_preview.md)
 - [OLED UI モード](oled_ui_modes.md)
+- [OLED アニメーションエディタ](oled_anim_editor.md)
 
 `examples/remote_zenoh_ui.py` は H.264 の受信映像と、リモート側 JPEG（`camera/image/jpeg/remote`）を並べて表示できます（PySide6/pyqtgraph と ffmpeg が必要）。
 

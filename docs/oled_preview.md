@@ -49,6 +49,11 @@ python3 tools/oled_preview/render_oled_sequence.py \
   --height 32
 ```
 
+## GUI エディタ
+
+1枚の画像や `.bin` からアニメーションを作成できる GUI 版ツールがあります。  
+詳細は `docs/oled_anim_editor.md` を参照してください。
+
 ## 注意
 - `height` は 8 の倍数である必要があります（SSD1306 の page 構造に合わせています）。
 - `.bin` のサイズは `width * height / 8` bytes に一致する必要があります。
