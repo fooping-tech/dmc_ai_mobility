@@ -127,6 +127,21 @@ def cmd_oled(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_oled_mode(args: argparse.Namespace) -> int:
+    key = _key(args.robot_id, "oled/mode")
+    session = args.open_session()
+    pub = session.declare_publisher(key)
+    try:
+        payload = {"mode": args.mode, "ts_ms": int(time.time() * 1000)}
+        if args.settings_index is not None:
+            payload["settings_index"] = int(args.settings_index)
+        pub.put(json.dumps(payload).encode("utf-8"))
+        time.sleep(0.1)
+    finally:
+        session.close()
+    return 0
+
+
 def _mono1_buf_len(width: int, height: int) -> int:
     if width <= 0 or height <= 0 or (height % 8) != 0:
         raise SystemExit("width/height must be > 0 and height must be a multiple of 8")
@@ -916,6 +931,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     oled = sub.add_parser("oled", help="Publish oled/cmd once")
     oled.add_argument("--text", type=str, required=True)
     oled.set_defaults(func=cmd_oled)
+
+    oled_mode = sub.add_parser("oled-mode", help="Publish oled/mode once")
+    oled_mode.add_argument("--mode", type=str, required=True)
+    oled_mode.add_argument("--settings-index", type=int, default=None)
+    oled_mode.set_defaults(func=cmd_oled_mode)
 
     oled_img = sub.add_parser("oled-image", help="Publish oled/image/mono1 once (raw mono1 bytes)")
     oled_img_src = oled_img.add_mutually_exclusive_group(required=True)

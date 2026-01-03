@@ -28,6 +28,15 @@ robot_id = "rasp-zero-01"
 - `width`/`height`: OLED 解像度
 - `override_s`: Zenoh 経由の表示を何秒だけ優先表示するか
 - `boot_image`/`motor_image`: 通常表示用の画像（`.bin` または画像ファイル）
+- `default_mode`: UI モードの既定値（`legacy`/`welcome`/`drive`/`settings`）
+- `welcome_frames_dir`: ウェルカムアニメのフレームフォルダ
+- `welcome_fps`: ウェルカムアニメの再生 FPS
+- `welcome_loop`: ウェルカムアニメのループ有無
+- `welcome_on_boot`: 起動時にウェルカムアニメを再生するか
+- `mode_switch_frames_dir`: モード切替アニメのフレームフォルダ
+- `mode_switch_fps`: モード切替アニメの再生 FPS
+- `eyes_frames_dir`: 走行モードの“目”アニメのフレームフォルダ
+- `eyes_fps`: “目”アニメの再生 FPS
 
 ## [camera]
 
@@ -79,6 +88,15 @@ height = 32
 override_s = 2.0
 # boot_image = "assets/bin/boot.bin"
 # motor_image = "assets/bin/motor.bin"
+# default_mode = "legacy"
+# welcome_frames_dir = "assets/oled/welcome"
+# welcome_fps = 10
+# welcome_loop = false
+# welcome_on_boot = true
+# mode_switch_frames_dir = "assets/oled/mode_switch"
+# mode_switch_fps = 10
+# eyes_frames_dir = "assets/oled/eyes"
+# eyes_fps = 10
 
 [camera]
 enable = true

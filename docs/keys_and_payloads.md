@@ -104,7 +104,8 @@ JSON schema:
 
 - Subscribe: `dmc_robo/<robot_id>/oled/cmd`
 - Subscribe (bytes): `dmc_robo/<robot_id>/oled/image/mono1`
-- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `oled_cmd()` / `oled_image_mono1()`
+- Subscribe (mode): `dmc_robo/<robot_id>/oled/mode`
+- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `oled_cmd()` / `oled_image_mono1()` / `oled_mode()`
 - payload: JSON（UTF-8 bytes）
 
 JSON schema:
@@ -129,6 +130,27 @@ JSON schema:
 
 備考:
 - 表示は一時的（`[oled].override_s` 秒）で、時間経過後は通常表示（起動時/モータ作動時の画像）に戻ります。
+
+#### oled/mode
+
+- Subscribe: `dmc_robo/<robot_id>/oled/mode`
+- payload: JSON（UTF-8 bytes）
+
+JSON schema:
+
+    {
+      "mode": "drive",
+      "settings_index": 2,
+      "ts_ms": 1735467890123
+    }
+
+フィールド:
+- `mode` (string): `legacy`/`welcome`/`drive`/`settings`
+- `settings_index` (int, optional): settings モードの選択位置（0 始まり）
+- `ts_ms` (int, optional): 送信側タイムスタンプ（epoch ms）
+
+備考:
+- `mode_switch_frames_dir` が設定されている場合、モード変更時に切替アニメを表示します。
 
 ### camera
 

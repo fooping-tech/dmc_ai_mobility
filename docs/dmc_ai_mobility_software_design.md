@@ -121,9 +121,11 @@ dmc_robo/<robot_id>/<component>/<direction>
 
 - Key: `dmc_robo/<robot_id>/oled/cmd`
 - Key: `dmc_robo/<robot_id>/oled/image/mono1`
+- Key: `dmc_robo/<robot_id>/oled/mode`
 
 `oled/cmd` は JSON でテキスト表示、`oled/image/mono1` は SSD1306 の mono1 バッファ（生 bytes）を受け取る。  
-受信した表示は一定時間（`config.toml` の `[oled].override_s`）だけ表示し、その後は通常表示へ戻す。
+受信した表示は一定時間（`config.toml` の `[oled].override_s`）だけ表示し、その後は通常表示へ戻す。  
+`oled/mode` は UI モード（welcome/drive/settings/legacy）の切替に使用する。
 
 #### Camera 画像（Publish）
 
@@ -205,6 +207,10 @@ height = 32
 override_s = 2.0
 # boot_image = "assets/bin/boot.bin"
 # motor_image = "assets/bin/motor.bin"
+# default_mode = "legacy"
+# welcome_frames_dir = "assets/oled/welcome"
+# mode_switch_frames_dir = "assets/oled/mode_switch"
+# eyes_frames_dir = "assets/oled/eyes"
 
 [camera]
 enable = true

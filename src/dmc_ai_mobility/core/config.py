@@ -40,6 +40,15 @@ class OledConfig:
     override_s: float = 2.0
     boot_image: Optional[str] = None
     motor_image: Optional[str] = None
+    default_mode: str = "legacy"
+    welcome_frames_dir: Optional[str] = None
+    welcome_fps: float = 10.0
+    welcome_loop: bool = False
+    welcome_on_boot: bool = True
+    mode_switch_frames_dir: Optional[str] = None
+    mode_switch_fps: float = 10.0
+    eyes_frames_dir: Optional[str] = None
+    eyes_fps: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -157,6 +166,15 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             override_s=float(oled.get("override_s", OledConfig.override_s)),
             boot_image=_optional_str(oled.get("boot_image")),
             motor_image=_optional_str(oled.get("motor_image")),
+            default_mode=str(oled.get("default_mode", OledConfig.default_mode)),
+            welcome_frames_dir=_optional_str(oled.get("welcome_frames_dir")),
+            welcome_fps=float(oled.get("welcome_fps", OledConfig.welcome_fps)),
+            welcome_loop=bool(oled.get("welcome_loop", OledConfig.welcome_loop)),
+            welcome_on_boot=bool(oled.get("welcome_on_boot", OledConfig.welcome_on_boot)),
+            mode_switch_frames_dir=_optional_str(oled.get("mode_switch_frames_dir")),
+            mode_switch_fps=float(oled.get("mode_switch_fps", OledConfig.mode_switch_fps)),
+            eyes_frames_dir=_optional_str(oled.get("eyes_frames_dir")),
+            eyes_fps=float(oled.get("eyes_fps", OledConfig.eyes_fps)),
         ),
         camera=CameraConfig(
             enable=bool(camera.get("enable", CameraConfig.enable)),

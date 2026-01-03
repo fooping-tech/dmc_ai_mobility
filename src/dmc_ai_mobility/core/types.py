@@ -87,6 +87,20 @@ class OledCmd:
 
 
 @dataclass(frozen=True)
+class OledModeCmd:
+    mode: str
+    settings_index: Optional[int] = None
+    ts_ms: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "OledModeCmd":
+        mode = str(data.get("mode") or "")
+        settings_index = _optional_int(data.get("settings_index"), "settings_index")
+        ts_ms = _optional_int(data.get("ts_ms"), "ts_ms")
+        return cls(mode=mode, settings_index=settings_index, ts_ms=ts_ms)
+
+
+@dataclass(frozen=True)
 class CameraMeta:
     width: int
     height: int

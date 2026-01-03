@@ -27,6 +27,7 @@ python3 examples/remote_zenoh_tool.py \
 - motor cmd: `dmc_robo/<robot_id>/motor/cmd`
 - oled cmd: `dmc_robo/<robot_id>/oled/cmd`
 - oled image: `dmc_robo/<robot_id>/oled/image/mono1`
+- oled mode: `dmc_robo/<robot_id>/oled/mode`
 - camera jpeg/meta: `dmc_robo/<robot_id>/camera/image/jpeg` / `camera/meta`
 - camera h264/meta: `dmc_robo/<robot_id>/camera/video/h264` / `camera/video/h264/meta`
 - lidar scan/front: `dmc_robo/<robot_id>/lidar/scan` / `lidar/front`

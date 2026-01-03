@@ -9,8 +9,14 @@ from typing import Optional
 
 from dmc_ai_mobility.core.config import RobotConfig
 from dmc_ai_mobility.core.oled_bitmap import load_oled_asset_mono1, mono1_buf_len
+from dmc_ai_mobility.core.oled_ui import (
+    OledFrameSequence,
+    load_oled_frames_dir,
+    render_menu_overlay,
+    render_text_overlay,
+)
 from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
-from dmc_ai_mobility.core.types import MotorCmd, OledCmd
+from dmc_ai_mobility.core.types import MotorCmd, OledCmd, OledModeCmd
 from dmc_ai_mobility.drivers.camera_h264 import (
     LibcameraH264Config,
     LibcameraH264Driver,
@@ -31,6 +37,25 @@ from dmc_ai_mobility.zenoh.pubsub import publish_json, subscribe_json
 from dmc_ai_mobility.zenoh.session import ZenohOpenOptions, open_session
 
 logger = logging.getLogger(__name__)
+
+OLED_MODE_LEGACY = "legacy"
+OLED_MODE_WELCOME = "welcome"
+OLED_MODE_DRIVE = "drive"
+OLED_MODE_SETTINGS = "settings"
+OLED_VALID_MODES = {
+    OLED_MODE_LEGACY,
+    OLED_MODE_WELCOME,
+    OLED_MODE_DRIVE,
+    OLED_MODE_SETTINGS,
+}
+OLED_SETTINGS_ITEMS = (
+    "CALIB",
+    "WIFI",
+    "GIT PULL",
+    "BRANCH",
+    "SHUTDOWN",
+    "REBOOT",
+)
 
 
 def _load_motor_trim(path: Path) -> float:
@@ -221,6 +246,19 @@ def run_robot(
     oled_override_text: str = ""
     oled_override_mono1: bytes = b""
     oled_override_ms = int(max(float(config.oled.override_s), 0.0) * 1000.0)
+    oled_mode_lock = threading.Lock()
+    oled_default_mode = str(getattr(config.oled, "default_mode", OLED_MODE_LEGACY) or OLED_MODE_LEGACY).lower()
+    if oled_default_mode not in OLED_VALID_MODES:
+        logger.warning("invalid oled.default_mode=%s; using legacy", oled_default_mode)
+        oled_default_mode = OLED_MODE_LEGACY
+    oled_mode = oled_default_mode
+    oled_settings_index = 0
+    oled_mode_switch_active = False
+    oled_mode_switch_start_ms = 0
+    oled_mode_switch_target: Optional[str] = None
+    oled_welcome_start_ms = 0
+    oled_welcome_next_mode = oled_default_mode
+    eyes_start_ms = monotonic_ms()
 
     def on_oled_cmd(data: dict) -> None:
         nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
@@ -252,6 +290,80 @@ def run_robot(
     except Exception as e:
         logger.warning("failed to load oled.motor_image (%s): %s", config.oled.motor_image, e)
 
+    welcome_frames: list[bytes] = []
+    mode_switch_frames: list[bytes] = []
+    eyes_frames: list[bytes] = []
+    if config.oled.welcome_frames_dir:
+        try:
+            welcome_frames = load_oled_frames_dir(
+                config.oled.welcome_frames_dir, width=oled_width, height=oled_height
+            )
+        except Exception as e:
+            logger.warning("failed to load oled.welcome_frames_dir (%s): %s", config.oled.welcome_frames_dir, e)
+    if config.oled.mode_switch_frames_dir:
+        try:
+            mode_switch_frames = load_oled_frames_dir(
+                config.oled.mode_switch_frames_dir, width=oled_width, height=oled_height
+            )
+        except Exception as e:
+            logger.warning(
+                "failed to load oled.mode_switch_frames_dir (%s): %s",
+                config.oled.mode_switch_frames_dir,
+                e,
+            )
+    if config.oled.eyes_frames_dir:
+        try:
+            eyes_frames = load_oled_frames_dir(
+                config.oled.eyes_frames_dir, width=oled_width, height=oled_height
+            )
+        except Exception as e:
+            logger.warning("failed to load oled.eyes_frames_dir (%s): %s", config.oled.eyes_frames_dir, e)
+
+    welcome_seq = OledFrameSequence(
+        welcome_frames, fps=float(config.oled.welcome_fps), loop=bool(config.oled.welcome_loop)
+    )
+    mode_switch_seq = OledFrameSequence(
+        mode_switch_frames, fps=float(config.oled.mode_switch_fps), loop=False
+    )
+    eyes_seq = OledFrameSequence(eyes_frames, fps=float(config.oled.eyes_fps), loop=True)
+
+    if oled_mode == OLED_MODE_WELCOME:
+        oled_welcome_start_ms = monotonic_ms()
+        oled_welcome_next_mode = oled_default_mode
+
+    if welcome_seq.frames and bool(config.oled.welcome_on_boot):
+        oled_welcome_start_ms = monotonic_ms()
+        oled_welcome_next_mode = oled_default_mode
+        oled_mode = OLED_MODE_WELCOME
+
+    def _set_oled_mode(
+        mode: str,
+        *,
+        settings_index: Optional[int] = None,
+        now_ms: Optional[int] = None,
+        use_transition: bool = True,
+    ) -> None:
+        nonlocal oled_mode, oled_settings_index
+        nonlocal oled_mode_switch_active, oled_mode_switch_start_ms, oled_mode_switch_target
+        nonlocal oled_welcome_start_ms, oled_welcome_next_mode
+        mode = str(mode or "").lower()
+        if mode not in OLED_VALID_MODES:
+            logger.warning("invalid oled mode: %s", mode)
+            return
+        now = monotonic_ms() if now_ms is None else int(now_ms)
+        with oled_mode_lock:
+            if settings_index is not None and OLED_SETTINGS_ITEMS:
+                oled_settings_index = max(0, min(int(settings_index), len(OLED_SETTINGS_ITEMS) - 1))
+            if mode == OLED_MODE_WELCOME:
+                oled_welcome_start_ms = now
+                oled_welcome_next_mode = oled_default_mode
+            if use_transition and mode_switch_seq.frames and (mode != oled_mode or oled_mode_switch_active):
+                oled_mode_switch_active = True
+                oled_mode_switch_start_ms = now
+                oled_mode_switch_target = mode
+                return
+            oled_mode = mode
+
     def on_oled_image_mono1(payload: bytes) -> None:
         nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
         if log_all_cmd:
@@ -271,17 +383,37 @@ def run_robot(
             oled_override_text = ""
             oled_override_until_ms = monotonic_ms() + oled_override_ms
 
+    def on_oled_mode_cmd(data: dict) -> None:
+        try:
+            cmd = OledModeCmd.from_dict(data)
+        except Exception as e:
+            logger.warning("invalid oled mode cmd: %s", e)
+            return
+        if log_all_cmd:
+            logger.info(
+                "oled mode (recv): mode=%s settings_index=%s ts_ms=%s",
+                cmd.mode,
+                cmd.settings_index,
+                cmd.ts_ms,
+            )
+        _set_oled_mode(cmd.mode, settings_index=cmd.settings_index)
+
     subs = [
         subscribe_json(session, keys.motor_cmd(robot_id), on_motor_cmd),
         subscribe_json(session, keys.oled_cmd(robot_id), on_oled_cmd),
         session.subscribe(keys.oled_image_mono1(robot_id), on_oled_image_mono1),
+        subscribe_json(session, keys.oled_mode(robot_id), on_oled_mode_cmd),
     ]
 
     def oled_loop() -> None:
         nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        nonlocal oled_mode, oled_settings_index
+        nonlocal oled_mode_switch_active, oled_mode_switch_start_ms, oled_mode_switch_target
+        nonlocal oled_welcome_start_ms, oled_welcome_next_mode
         # OLED 表示は 1 つのループに集約し、優先順位で表示内容を決める。
-        # 1) Zenoh から来た override（text / mono1）を一定時間表示
-        # 2) 通常時は boot/motor 状態に応じた画像（無ければ簡易テキスト）
+        # 1) Zenoh から来た override（text / mono1）
+        # 2) mode switch animation（任意）
+        # 3) base UI mode（welcome/drive/settings/legacy）
         hz = max(float(config.oled.max_hz), 1.0)
         sleeper = PeriodicSleeper(hz)
         while not stop_event.is_set():
@@ -318,13 +450,136 @@ def run_robot(
                         oled_override_mono1 = b""
                         oled_override_until_ms = 0
 
-            # 2) base state
+            # Snapshot UI mode state.
+            with oled_mode_lock:
+                mode = oled_mode
+                settings_index = oled_settings_index
+                mode_switch_active = oled_mode_switch_active
+                mode_switch_start_ms = oled_mode_switch_start_ms
+                mode_switch_target = oled_mode_switch_target
+                welcome_start_ms = oled_welcome_start_ms
+                welcome_next_mode = oled_welcome_next_mode
+
+            # 2) mode switch animation
+            if mode_switch_active and mode_switch_seq.frames:
+                frame, done = mode_switch_seq.frame_at(now, mode_switch_start_ms)
+                try:
+                    if frame is not None:
+                        overlay = None
+                        if mode_switch_target:
+                            overlay = render_text_overlay(
+                                frame,
+                                width=oled_width,
+                                height=oled_height,
+                                lines=("MODE", mode_switch_target.upper()),
+                                font_size=10,
+                                line_spacing=1,
+                            )
+                        oled.show_mono1(overlay if overlay is not None else frame)
+                    else:
+                        oled.show_text("MODE")
+                except Exception as e:
+                    logger.warning("oled mode switch render failed: %s", e)
+                if done:
+                    with oled_mode_lock:
+                        if oled_mode_switch_active and oled_mode_switch_start_ms == mode_switch_start_ms:
+                            oled_mode_switch_active = False
+                            if mode_switch_target:
+                                oled_mode = mode_switch_target
+                                if mode_switch_target == OLED_MODE_WELCOME:
+                                    oled_welcome_start_ms = now
+                                    oled_welcome_next_mode = oled_default_mode
+                            oled_mode_switch_target = None
+                sleeper.sleep()
+                continue
+
+            # 3) base UI mode
+            if mode == OLED_MODE_WELCOME:
+                if welcome_seq.frames:
+                    frame, done = welcome_seq.frame_at(now, welcome_start_ms)
+                    try:
+                        if frame is not None:
+                            oled.show_mono1(frame)
+                        else:
+                            oled.show_text(f"{robot_id}\nWELCOME")
+                    except Exception as e:
+                        logger.warning("oled welcome render failed: %s", e)
+                    if done and not welcome_seq.loop:
+                        _set_oled_mode(welcome_next_mode, now_ms=now, use_transition=True)
+                    sleeper.sleep()
+                    continue
+                try:
+                    oled.show_text(f"{robot_id}\nWELCOME")
+                except Exception as e:
+                    logger.warning("oled welcome render failed: %s", e)
+                sleeper.sleep()
+                continue
+
+            if mode == OLED_MODE_SETTINGS:
+                page_size = 2
+                safe_index = max(0, min(int(settings_index), len(OLED_SETTINGS_ITEMS) - 1))
+                page_start = (safe_index // page_size) * page_size
+                lines = OLED_SETTINGS_ITEMS[page_start : page_start + page_size]
+                local_index = safe_index - page_start
+                try:
+                    overlay = render_menu_overlay(
+                        lines,
+                        selected_index=local_index,
+                        width=oled_width,
+                        height=oled_height,
+                        font_size=10,
+                        line_spacing=1,
+                    )
+                    if overlay is not None:
+                        oled.show_mono1(overlay)
+                    else:
+                        text_lines = []
+                        for idx, line in enumerate(lines):
+                            prefix = ">" if idx == local_index else " "
+                            text_lines.append(f"{prefix}{line}")
+                        oled.show_text("\n".join(text_lines))
+                except Exception as e:
+                    logger.warning("oled settings render failed: %s", e)
+                sleeper.sleep()
+                continue
+
+            if mode == OLED_MODE_DRIVE:
+                cmd = last_motor_cmd
+                v_l = float(cmd.v_l) if cmd else 0.0
+                v_r = float(cmd.v_r) if cmd else 0.0
+                lines = (f"L:{v_l:+.2f}", f"R:{v_r:+.2f}")
+                font_size = 10
+                line_spacing = 1
+                line_height = font_size + line_spacing
+                offset_y = max(0, oled_height - line_height * len(lines))
+                try:
+                    frame = None
+                    if eyes_seq.frames:
+                        frame, _ = eyes_seq.frame_at(now, eyes_start_ms)
+                    overlay = render_text_overlay(
+                        frame,
+                        width=oled_width,
+                        height=oled_height,
+                        lines=lines,
+                        font_size=font_size,
+                        line_spacing=line_spacing,
+                        offset_y=offset_y,
+                    )
+                    if overlay is not None:
+                        oled.show_mono1(overlay)
+                    else:
+                        oled.show_text("\n".join(lines))
+                except Exception as e:
+                    logger.warning("oled drive render failed: %s", e)
+                sleeper.sleep()
+                continue
+
+            # legacy base state (boot/motor images)
             cmd = last_motor_cmd
             cmd_ms = last_motor_cmd_ms
             deadman = int(motor_deadman_ms)
             moving = bool(cmd and (abs(cmd.v_l) > 1e-3 or abs(cmd.v_r) > 1e-3))
             fresh = bool(cmd_ms is not None and (now - int(cmd_ms)) <= deadman)
-
             try:
                 if fresh and moving:
                     if motor_mono1 is not None:

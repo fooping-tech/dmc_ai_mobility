@@ -32,6 +32,22 @@ override_s = 2.0
 #
 boot_image = "assets/bin/boot.bin"
 # motor_image = "assets/oled/motor.bin"
+#
+# Optional: OLED UI modes (pre-rendered animations + drive/settings UI)
+# - default_mode: legacy|welcome|drive|settings (legacy keeps boot/motor behavior)
+# - welcome_frames_dir: folder of frames for welcome animation (png/jpg/bin)
+# - mode_switch_frames_dir: folder of frames for mode switch animation
+# - eyes_frames_dir: folder of frames for drive mode "eyes"
+# - *_fps: playback rate
+default_mode = "legacy"
+# welcome_frames_dir = "assets/oled/welcome"
+# welcome_fps = 10
+# welcome_loop = false
+# welcome_on_boot = true
+# mode_switch_frames_dir = "assets/oled/mode_switch"
+# mode_switch_fps = 10
+# eyes_frames_dir = "assets/oled/eyes"
+# eyes_fps = 10
 
 [camera]
 enable = false

@@ -200,6 +200,23 @@ payload（JSON）例:
     python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 oled-image \
       --bin ./assets/oled/boot.bin --width 128 --height 32
 
+## 3c) oled モード切替を Publish（UIモード）
+
+ロボットが subscribe しているキー:
+- `dmc_robo/<robot_id>/oled/mode`
+
+実行例（走行モードへ切替）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 \
+      oled-mode --mode drive
+
+実行例（設定モードで 2 番目を選択）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 \
+      oled-mode --mode settings --settings-index 1
+
+`settings-index` は 0 始まりです。
+
 ## 4) camera を Subscribe（JPEG と meta）
 
 ロボットが publish しているキー:
