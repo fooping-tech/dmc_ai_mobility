@@ -85,6 +85,13 @@ python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./z
   --encode-out ./camera_stream.mp4 --flush
 ```
 
+リモート側で JPEG に変換して Publish:
+
+```bash
+python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+  --republish-jpeg --republish-jpeg-key camera/image/jpeg/remote --republish-meta-key camera/meta/remote
+```
+
 生の .h264 を保存しない場合:
 
 ```bash
@@ -93,6 +100,7 @@ python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./z
 ```
 
 ※ `--encode-out` は `ffmpeg` が必要です。
+※ `--republish-jpeg` は `ffmpeg` が必要です。
 
 保存ファイルの再生:
 

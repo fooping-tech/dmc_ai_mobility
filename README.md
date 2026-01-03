@@ -52,7 +52,7 @@ PYTHONPATH=src python3 -m dmc_ai_mobility.app.cli health --config ./config.toml 
 
 ## Remote UI
 
-`examples/remote_zenoh_ui.py` は Zenoh 経由の操作 UI です。H.264 の受信映像と JPEG を並べて表示します。
+`examples/remote_zenoh_ui.py` は Zenoh 経由の操作 UI です。H.264 の受信映像と、リモート側で再 publish した JPEG（`camera/image/jpeg/remote`）を並べて表示します。
 
 ```bash
 python3 -m pip install PySide6 pyqtgraph

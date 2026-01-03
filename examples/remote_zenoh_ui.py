@@ -488,10 +488,10 @@ class ZenohClient:
         )
         self._sub_imu = self._session.declare_subscriber(_key(self._robot_id, "imu/state"), on_imu)
         self._sub_cam_meta = self._session.declare_subscriber(
-            _key(self._robot_id, "camera/meta"), on_meta
+            _key(self._robot_id, "camera/meta/remote"), on_meta
         )
         self._sub_cam_jpeg = self._session.declare_subscriber(
-            _key(self._robot_id, "camera/image/jpeg"), on_jpeg
+            _key(self._robot_id, "camera/image/jpeg/remote"), on_jpeg
         )
         self._sub_cam_h264 = self._session.declare_subscriber(
             _key(self._robot_id, "camera/video/h264"), on_h264
@@ -974,9 +974,9 @@ class MainWindow:
         self._cam_h264_label.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         h264_layout.addWidget(self._cam_h264_label, 1)
 
-        jpeg_panel = QGroupBox("JPEG (robot encoded)")
+        jpeg_panel = QGroupBox("JPEG (remote republish)")
         jpeg_layout = QVBoxLayout(jpeg_panel)
-        self._cam_jpeg_label = QLabel("jpeg: waiting for image...")
+        self._cam_jpeg_label = QLabel("jpeg: waiting for remote image...")
         self._cam_jpeg_label.setAlignment(Qt.AlignCenter)
         self._cam_jpeg_label.setMinimumHeight(300)
         self._cam_jpeg_label.setFrameStyle(QFrame.Panel | QFrame.Sunken)
