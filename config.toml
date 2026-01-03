@@ -34,11 +34,27 @@ boot_image = "assets/bin/boot.bin"
 # motor_image = "assets/oled/motor.bin"
 
 [camera]
-enable = true
+enable = false
 device = 0
+width = 160
+height = 120
+fps = 30
+# Trim right/bottom padding when the actual frame is larger than the requested size.
+auto_trim = true
+# JPEG encode quality (1-100). Lower is faster/smaller.
+jpeg_quality = 10
+# Prefer minimal internal buffering if supported by the backend.
+buffer_size = 1
+# Keep only the newest frame (drop older frames when publish lags).
+latest_only = true
+
+[camera_h264]
+enable = true
 width = 640
 height = 480
-fps = 10
+fps = 30
+bitrate = 2000000
+chunk_bytes = 65536
 
 [lidar]
 # Optional: LiDAR support (disabled by default)

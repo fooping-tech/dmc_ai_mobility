@@ -34,6 +34,18 @@ robot_id = "rasp-zero-01"
 - `enable`: カメラの有効/無効
 - `device`: V4L2 デバイス番号（例: 0 => `/dev/video0`）
 - `width`/`height`/`fps`: 取得サイズと publish 周期
+- `auto_trim`: 要求サイズより大きいフレームが返る場合に右/下をトリムする
+- `buffer_size`: 内部バッファサイズ（小さくすると遅延を減らせる場合あり）
+- `latest_only`: 最新フレームのみ保持し、遅延を溜めない
+- `jpeg_quality`: JPEG エンコード品質（1-100、低いほど軽い）
+
+## [camera_h264]
+
+- `enable`: H.264 配信の有効/無効
+- `width`/`height`/`fps`: H.264 の解像度とフレームレート
+- `bitrate`: H.264 のビットレート（bps）
+- `chunk_bytes`: 送信チャンクサイズ（bytes）
+- `rpicam-vid` が必要です（bookworm の rpicam-apps）。旧環境は `libcamera-vid` の場合があります。
 
 ## [lidar]
 
@@ -74,4 +86,16 @@ device = 0
 width = 640
 height = 480
 fps = 10
+auto_trim = true
+buffer_size = 1
+latest_only = true
+jpeg_quality = 80
+
+[camera_h264]
+enable = false
+width = 640
+height = 480
+fps = 30
+bitrate = 2000000
+chunk_bytes = 65536
 ```

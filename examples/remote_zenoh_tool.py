@@ -10,6 +10,11 @@ Usage and Zenoh connection configuration examples are documented in:
 
 import argparse
 import json
+import math
+import queue
+import shutil
+import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -183,6 +188,117 @@ def _decode_json_payload(sample: Any) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
+def _percentile(sorted_vals: list[float], pct: float) -> float:
+    if not sorted_vals:
+        raise ValueError("empty values")
+    k = (len(sorted_vals) - 1) * (pct / 100.0)
+    f = math.floor(k)
+    c = math.ceil(k)
+    if f == c:
+        return float(sorted_vals[int(k)])
+    return float(sorted_vals[f]) + (float(sorted_vals[c]) - float(sorted_vals[f])) * (k - f)
+
+
+def _summarize(values: list[float]) -> dict[str, float]:
+    if not values:
+        return {}
+    vals = sorted(float(v) for v in values)
+    avg = sum(vals) / len(vals)
+    return {
+        "count": float(len(vals)),
+        "min": float(vals[0]),
+        "avg": float(avg),
+        "p50": float(_percentile(vals, 50)),
+        "p95": float(_percentile(vals, 95)),
+        "max": float(vals[-1]),
+    }
+
+
+def _print_summary(label: str, values: list[float]) -> None:
+    stats = _summarize(values)
+    if not stats:
+        print(f"{label}: no samples")
+        return
+    print(
+        f"{label}: count={int(stats['count'])} min={stats['min']:.1f} avg={stats['avg']:.1f} "
+        f"p50={stats['p50']:.1f} p95={stats['p95']:.1f} max={stats['max']:.1f}"
+    )
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _plot_latency(samples: list[dict[str, Any]], *, title: str | None, out_path: Path | None, show: bool) -> None:
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception as e:
+        raise SystemExit("matplotlib is required for --plot/--plot-out (pip install matplotlib)") from e
+
+    if not samples:
+        print("no samples to plot")
+        return
+
+    xs: list[float] = []
+    read_ms: list[float] = []
+    pipeline: list[float] = []
+    start_to_publish: list[float] = []
+    publish_to_remote: list[float] = []
+    for idx, sample in enumerate(samples):
+        seq = sample.get("seq")
+        xs.append(float(seq) if seq is not None else float(idx))
+        read_val = sample.get("read_ms")
+        pipeline_val = sample.get("pipeline_ms")
+        start_to_publish_val = sample.get("start_to_publish_ms")
+        publish_to_remote_val = sample.get("publish_to_remote_ms")
+        read_num = float(read_val) if read_val is not None else math.nan
+        pipeline_num = float(pipeline_val) if pipeline_val is not None else math.nan
+        start_num = float(start_to_publish_val) if start_to_publish_val is not None else math.nan
+        publish_remote_num = (
+            float(publish_to_remote_val) if publish_to_remote_val is not None else math.nan
+        )
+        read_ms.append(read_num)
+        pipeline.append(pipeline_num)
+        start_to_publish.append(start_num)
+        publish_to_remote.append(publish_remote_num)
+
+    fig, ax = plt.subplots()
+    stack_read = [0.0 if math.isnan(v) else v for v in read_ms]
+    stack_pipeline = [0.0 if math.isnan(v) else v for v in pipeline]
+    stack_publish_remote = [0.0 if math.isnan(v) else v for v in publish_to_remote]
+    series = [stack_read, stack_pipeline]
+    labels = ["read_ms", "pipeline_ms"]
+    if any(v > 0 for v in stack_publish_remote):
+        series.append(stack_publish_remote)
+        labels.append("publish_to_remote_ms")
+    if any(v > 0 for v in stack_read) or any(v > 0 for v in stack_pipeline) or any(v > 0 for v in stack_publish_remote):
+        ax.stackplot(xs, series, labels=labels, alpha=0.5)
+    if any(not math.isnan(v) for v in start_to_publish):
+        ax.plot(xs, start_to_publish, label="start_to_publish_ms", color="black", linewidth=1.2)
+    ax.set_xlabel("seq")
+    ax.set_ylabel("ms")
+    ax.grid(True, linestyle="--", alpha=0.4)
+    if title:
+        ax.set_title(title)
+    ax.legend()
+
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        print(f"saved plot: {out_path}")
+    if show:
+        plt.show()
+
+
 def cmd_imu(args: argparse.Namespace) -> int:
     key = _key(args.robot_id, "imu/state")
     session = args.open_session()
@@ -255,6 +371,431 @@ def cmd_camera(args: argparse.Namespace) -> int:
         sub_img.undeclare()
         sub_meta.undeclare()
         session.close()
+    return 0
+
+
+def cmd_camera_latency(args: argparse.Namespace) -> int:
+    key_meta = _key(args.robot_id, "camera/meta")
+    session = args.open_session()
+
+    samples: list[dict[str, Any]] = []
+    lock = threading.Lock()
+    stop_event = threading.Event()
+
+    def on_meta(sample: Any) -> None:
+        try:
+            meta = _decode_json_payload(sample)
+        except Exception:
+            return
+
+        # 受信時刻（publish->remote の推定に使用）
+        recv_ts_ms = int(time.time() * 1000)
+        capture_ts_ms = _to_int(meta.get("capture_ts_ms"))
+        publish_ts_ms = _to_int(meta.get("publish_ts_ms"))
+        capture_start_mono_ms = _to_int(meta.get("capture_start_mono_ms"))
+        publish_mono_ms = _to_int(meta.get("publish_mono_ms"))
+        pipeline_ms = _to_float(meta.get("pipeline_ms"))
+        read_ms = _to_float(meta.get("read_ms"))
+        publish_to_remote_ms = None
+        if publish_ts_ms is not None:
+            publish_to_remote_ms = float(recv_ts_ms - publish_ts_ms)
+        start_to_publish_ms = None
+        if read_ms is not None and pipeline_ms is not None:
+            start_to_publish_ms = read_ms + pipeline_ms
+        elif capture_start_mono_ms is not None and publish_mono_ms is not None:
+            start_to_publish_ms = float(publish_mono_ms - capture_start_mono_ms)
+
+        entry = {
+            "seq": _to_int(meta.get("seq")),
+            "capture_ts_ms": capture_ts_ms,
+            "publish_ts_ms": publish_ts_ms,
+            "recv_ts_ms": recv_ts_ms,
+            "read_ms": read_ms,
+            "pipeline_ms": pipeline_ms,
+            "publish_to_remote_ms": publish_to_remote_ms,
+            "start_to_publish_ms": start_to_publish_ms,
+        }
+
+        with lock:
+            samples.append(entry)
+            sample_count = len(samples)
+
+        if args.print_each:
+            print(
+                "seq={seq} read_ms={read_ms} pipeline_ms={pipeline_ms} "
+                "start_to_publish_ms={start_to_publish_ms} publish_to_remote_ms={publish_to_remote_ms} "
+                "publish_ts_ms={publish_ts_ms} recv_ts_ms={recv_ts_ms}".format(**entry)
+            )
+
+        if args.max_samples > 0 and sample_count >= args.max_samples:
+            stop_event.set()
+
+    sub = session.declare_subscriber(key_meta, on_meta)
+    try:
+        if args.duration_s > 0:
+            deadline = time.monotonic() + args.duration_s
+            while not stop_event.is_set() and time.monotonic() < deadline:
+                time.sleep(0.1)
+        else:
+            def _wait_input() -> None:
+                input("subscribing camera latency... press Enter to quit\n")
+                stop_event.set()
+
+            threading.Thread(target=_wait_input, daemon=True).start()
+            while not stop_event.is_set():
+                time.sleep(0.1)
+    finally:
+        sub.undeclare()
+        session.close()
+
+    with lock:
+        snapshot = list(samples)
+
+    read_vals = [s["read_ms"] for s in snapshot if isinstance(s.get("read_ms"), (int, float))]
+    pipeline_vals = [s["pipeline_ms"] for s in snapshot if isinstance(s.get("pipeline_ms"), (int, float))]
+    publish_to_remote_vals = [
+        s["publish_to_remote_ms"]
+        for s in snapshot
+        if isinstance(s.get("publish_to_remote_ms"), (int, float))
+    ]
+    start_to_publish_vals = [
+        s["start_to_publish_ms"]
+        for s in snapshot
+        if isinstance(s.get("start_to_publish_ms"), (int, float))
+    ]
+
+    _print_summary("read_ms", read_vals)
+    _print_summary("pipeline_ms", pipeline_vals)
+    _print_summary("start_to_publish_ms", start_to_publish_vals)
+    _print_summary("publish_to_remote_ms", publish_to_remote_vals)
+
+    if args.plot or args.plot_out:
+        _plot_latency(snapshot, title=args.plot_title, out_path=args.plot_out, show=bool(args.plot))
+
+    return 0
+
+
+class _H264JpegRepublisher:
+    def __init__(
+        self,
+        *,
+        session: Any,
+        robot_id: str,
+        key_suffix_jpeg: str,
+        key_suffix_meta: Optional[str],
+        jpeg_quality: Optional[int],
+    ) -> None:
+        self._pub_jpeg = session.declare_publisher(_key(robot_id, key_suffix_jpeg))
+        self._pub_meta = None
+        if key_suffix_meta:
+            self._pub_meta = session.declare_publisher(_key(robot_id, key_suffix_meta))
+        self._jpeg_quality = jpeg_quality
+        self._proc: Optional[subprocess.Popen[bytes]] = None
+        self._queue: "queue.Queue[Optional[bytes]]" = queue.Queue(maxsize=60)
+        self._stop = threading.Event()
+        self._writer: Optional[threading.Thread] = None
+        self._reader: Optional[threading.Thread] = None
+        self._buf = bytearray()
+        self._last_meta: dict[str, Any] = {}
+        self._seq = 0
+        self._start()
+
+    def _start(self) -> None:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            print("ffmpeg not found; --republish-jpeg disabled")
+            return
+        cmd = [
+            ffmpeg,
+            "-loglevel",
+            "error",
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-f",
+            "h264",
+            "-i",
+            "pipe:0",
+            "-an",
+        ]
+        if self._jpeg_quality is not None:
+            cmd.extend(["-q:v", str(self._jpeg_quality)])
+        cmd.extend(["-f", "mjpeg", "pipe:1"])
+        try:
+            self._proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=0,
+            )
+        except Exception as e:
+            print(f"failed to start ffmpeg for republish: {e}")
+            self._proc = None
+            return
+        self._writer = threading.Thread(target=self._writer_loop, daemon=True)
+        self._reader = threading.Thread(target=self._reader_loop, daemon=True)
+        self._writer.start()
+        self._reader.start()
+
+    def update_meta(self, payload: dict[str, Any]) -> None:
+        self._last_meta = dict(payload)
+
+    def push(self, data: bytes) -> None:
+        if self._proc is None:
+            return
+        try:
+            self._queue.put_nowait(data)
+        except queue.Full:
+            return
+
+    def _writer_loop(self) -> None:
+        if self._proc is None or self._proc.stdin is None:
+            return
+        while not self._stop.is_set():
+            try:
+                chunk = self._queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if chunk is None:
+                break
+            try:
+                self._proc.stdin.write(chunk)
+            except Exception:
+                break
+        try:
+            if self._proc.stdin:
+                self._proc.stdin.close()
+        except Exception:
+            pass
+
+    def _reader_loop(self) -> None:
+        if self._proc is None or self._proc.stdout is None:
+            return
+        while not self._stop.is_set():
+            try:
+                chunk = self._proc.stdout.read(65536)
+            except Exception:
+                return
+            if not chunk:
+                return
+            self._buf.extend(chunk)
+            self._drain_frames()
+
+    def _drain_frames(self) -> None:
+        while True:
+            start = self._buf.find(b"\xff\xd8")
+            if start < 0:
+                if len(self._buf) > 2:
+                    self._buf = self._buf[-2:]
+                return
+            end = self._buf.find(b"\xff\xd9", start + 2)
+            if end < 0:
+                if start > 0:
+                    del self._buf[:start]
+                return
+            frame = bytes(self._buf[start : end + 2])
+            del self._buf[: end + 2]
+            self._publish_frame(frame)
+
+    def _publish_frame(self, frame: bytes) -> None:
+        try:
+            self._pub_jpeg.put(frame)
+        except Exception:
+            return
+        if self._pub_meta is None:
+            return
+        now_ms = int(time.time() * 1000)
+        payload = {
+            "source": "remote_h264",
+            "seq": self._seq,
+            "ts_ms": now_ms,
+        }
+        for key in ("width", "height", "fps", "bitrate", "codec"):
+            if key in self._last_meta:
+                payload[key] = self._last_meta[key]
+        self._seq += 1
+        try:
+            self._pub_meta.put(json.dumps(payload).encode("utf-8"))
+        except Exception:
+            return
+
+    def close(self) -> None:
+        self._stop.set()
+        try:
+            self._queue.put_nowait(None)
+        except Exception:
+            pass
+        if self._proc is not None:
+            try:
+                if self._proc.stdin:
+                    self._proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                self._proc.terminate()
+            except Exception:
+                pass
+        self._proc = None
+
+
+def cmd_camera_h264(args: argparse.Namespace) -> int:
+    key_video = _key(args.robot_id, "camera/video/h264")
+    key_meta = _key(args.robot_id, "camera/video/h264/meta")
+    session = args.open_session()
+
+    lock = threading.Lock()
+    out_fp = None
+    out_path = None
+    if not args.no_raw:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_fp = out_path.open("wb")
+    play_state: dict[str, Optional[object]] = {"stdin": None}
+    encode_state: dict[str, Optional[object]] = {"stdin": None}
+    republisher: Optional[_H264JpegRepublisher] = None
+
+    if args.play:
+        ffplay = shutil.which("ffplay")
+        if not ffplay:
+            print("ffplay not found; install ffmpeg to use --play")
+        else:
+            cmd = [
+                ffplay,
+                "-fflags",
+                "nobuffer",
+                "-flags",
+                "low_delay",
+                "-an",
+                "-i",
+                "pipe:0",
+            ]
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                play_state["proc"] = proc
+                play_state["stdin"] = proc.stdin
+            except Exception as e:
+                print(f"failed to start ffplay: {e}")
+
+    if args.encode_out:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            print("ffmpeg not found; install ffmpeg to use --encode-out")
+        else:
+            encode_path = Path(args.encode_out)
+            encode_path.parent.mkdir(parents=True, exist_ok=True)
+            cmd = [
+                ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "h264",
+                "-i",
+                "pipe:0",
+                "-an",
+                "-c:v",
+                args.encode_codec,
+            ]
+            if args.encode_codec == "libx264":
+                cmd.extend(["-preset", "veryfast", "-tune", "zerolatency"])
+            if encode_path.suffix.lower() in {".mp4", ".mov"}:
+                cmd.extend(["-movflags", "+faststart"])
+            cmd.append(str(encode_path))
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+                encode_state["proc"] = proc
+                encode_state["stdin"] = proc.stdin
+            except Exception as e:
+                print(f"failed to start ffmpeg: {e}")
+
+    if args.republish_jpeg:
+        quality = args.republish_jpeg_quality
+        if quality is not None:
+            quality = max(2, min(31, int(quality)))
+        republisher = _H264JpegRepublisher(
+            session=session,
+            robot_id=args.robot_id,
+            key_suffix_jpeg=args.republish_jpeg_key,
+            key_suffix_meta=args.republish_meta_key or None,
+            jpeg_quality=quality,
+        )
+
+    def on_video(sample: Any) -> None:
+        payload = sample.payload.to_bytes()
+        with lock:
+            if out_fp:
+                out_fp.write(payload)
+                if args.flush:
+                    out_fp.flush()
+            stdin = play_state.get("stdin")
+            if stdin:
+                try:
+                    stdin.write(payload)
+                    if args.flush:
+                        stdin.flush()
+                except BrokenPipeError:
+                    play_state["stdin"] = None
+            encode_stdin = encode_state.get("stdin")
+            if encode_stdin:
+                try:
+                    encode_stdin.write(payload)
+                    if args.flush:
+                        encode_stdin.flush()
+                except BrokenPipeError:
+                    encode_state["stdin"] = None
+            if republisher is not None:
+                republisher.push(payload)
+
+    def on_meta(sample: Any) -> None:
+        if not args.print_meta and republisher is None:
+            return
+        try:
+            meta = _decode_json_payload(sample)
+        except Exception:
+            return
+        if args.print_meta:
+            print("meta:", json.dumps(meta, ensure_ascii=False))
+        if republisher is not None and isinstance(meta, dict):
+            republisher.update_meta(meta)
+
+    sub_video = session.declare_subscriber(key_video, on_video)
+    sub_meta = session.declare_subscriber(key_meta, on_meta)
+    try:
+        input("subscribing camera h264... press Enter to quit\n")
+    finally:
+        sub_video.undeclare()
+        sub_meta.undeclare()
+        with lock:
+            if out_fp:
+                out_fp.close()
+            proc = play_state.get("proc")
+            if isinstance(proc, subprocess.Popen):
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+            proc = encode_state.get("proc")
+            if isinstance(proc, subprocess.Popen):
+                try:
+                    encode_stdin = encode_state.get("stdin")
+                    if encode_stdin:
+                        encode_stdin.close()
+                    proc.wait(timeout=2.0)
+                except Exception:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+        if republisher is not None:
+            republisher.close()
+        session.close()
+    if out_path:
+        print(f"saved: {out_path}")
+    if args.encode_out:
+        print(f"encoded: {args.encode_out}")
     return 0
 
 
@@ -395,6 +936,54 @@ def main(argv: Optional[list[str]] = None) -> int:
     cam.add_argument("--out-dir", type=Path, default=Path("./camera_frames"))
     cam.add_argument("--print-meta", action="store_true")
     cam.set_defaults(func=cmd_camera)
+
+    cam_h264 = sub.add_parser("camera-h264", help="Subscribe camera/video/h264 and save stream")
+    cam_h264.add_argument("--out", type=str, default="./camera_stream.h264")
+    cam_h264.add_argument("--no-raw", action="store_true", help="Do not save raw .h264 stream")
+    cam_h264.add_argument("--print-meta", action="store_true")
+    cam_h264.add_argument("--flush", action="store_true", help="Flush after each write")
+    cam_h264.add_argument("--play", action="store_true", help="Play stream with ffplay (requires ffmpeg)")
+    cam_h264.add_argument("--encode-out", type=str, default=None, help="Transcode to a file via ffmpeg")
+    cam_h264.add_argument("--encode-codec", type=str, default="libx264")
+    cam_h264.add_argument("--republish-jpeg", action="store_true", help="Republish decoded JPEG frames")
+    cam_h264.add_argument(
+        "--republish-jpeg-key",
+        type=str,
+        default="camera/image/jpeg/remote",
+        help="Publish JPEG frames to this key suffix",
+    )
+    cam_h264.add_argument(
+        "--republish-meta-key",
+        type=str,
+        default="camera/meta/remote",
+        help="Publish JPEG meta to this key suffix (empty to disable)",
+    )
+    cam_h264.add_argument(
+        "--republish-jpeg-quality",
+        type=int,
+        default=None,
+        help="ffmpeg jpeg quality (2-31). Lower is better.",
+    )
+    cam_h264.set_defaults(func=cmd_camera_h264)
+
+    cam_latency = sub.add_parser("camera-latency", help="Subscribe camera/meta and report latency stats")
+    cam_latency.add_argument(
+        "--duration-s",
+        type=float,
+        default=10.0,
+        help="Measurement duration in seconds (<=0 waits for Enter).",
+    )
+    cam_latency.add_argument(
+        "--max-samples",
+        type=int,
+        default=0,
+        help="Stop after N samples (0 = unlimited).",
+    )
+    cam_latency.add_argument("--print-each", action="store_true", help="Print per-sample latency")
+    cam_latency.add_argument("--plot", action="store_true", help="Show matplotlib graph (requires matplotlib)")
+    cam_latency.add_argument("--plot-out", type=Path, default=None, help="Save graph to a file (png)")
+    cam_latency.add_argument("--plot-title", type=str, default=None, help="Optional plot title")
+    cam_latency.set_defaults(func=cmd_camera_latency)
 
     lidar = sub.add_parser("lidar", help="Subscribe lidar scan/front and print")
     lidar.add_argument("--scan", action="store_true", help="Subscribe lidar/scan (angle-wise raw values)")

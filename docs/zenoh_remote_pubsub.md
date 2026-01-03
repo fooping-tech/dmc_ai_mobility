@@ -17,7 +17,7 @@
 最小操作スクリプト:
 
 - `examples/remote_zenoh_tool.py`（このリポジトリに同梱）
-  - `motor/stop/oled/imu/camera/lidar` のサブコマンドを提供します
+- `motor/stop/oled/imu/camera/camera-h264/lidar` のサブコマンドを提供します
 
 ## ネットワーク構成（おすすめ）
 
@@ -243,6 +243,75 @@ JPEG は bytes のまま届くので、ファイルに保存できます。
     sub_meta.undeclare()
     s.close()
     PY
+
+## 4b) camera レイテンシ計測（グラフ表示）
+
+`camera/meta` の `publish_ts_ms` と受信時刻から publish→受信レイテンシを計測します。  
+`--plot` または `--plot-out` を使う場合は `matplotlib` が必要です（`pip install matplotlib`）。
+
+計測の意味（camera-latency の表示項目。グラフは read_ms + pipeline_ms + publish_to_remote_ms を積み上げ表示）:
+- `read_ms`: `cap.read()` の開始→終了（キャプチャ読み取り時間の近似）。
+- `pipeline_ms`: キャプチャ終了→publish（JPEG encode + publish を含む）。
+- `start_to_publish_ms`: キャプチャ開始→publish（`read_ms + pipeline_ms`）。
+- `publish_to_remote_ms`（remote tool）: publish→受信（時計同期が必要）。
+- キャプチャ開始→publish を見たい場合は `publish_mono_ms - capture_start_mono_ms` を使います。
+
+実行例（コンソール表示のみ）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 20 --print-each
+
+実行例（PNG 出力）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 30 --plot-out ./camera_latency.png
+
+実行例（画面表示 + 保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-latency \
+      --duration-s 30 --plot --plot-out ./camera_latency.png
+
+## 4c) camera H.264 を Subscribe（Annex B ストリーム保存）
+
+ロボットが publish しているキー:
+- H.264: `dmc_robo/<robot_id>/camera/video/h264`
+- meta: `dmc_robo/<robot_id>/camera/video/h264/meta`
+
+実行例（ストリーム保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --out ./camera_stream.h264 --print-meta
+
+実行例（リアルタイム表示）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --play --flush
+
+実行例（リモート側でエンコードして保存）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --encode-out ./camera_stream.mp4 --flush
+
+実行例（H.264 をリモートで JPEG 化して Publish）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --republish-jpeg --republish-jpeg-key camera/image/jpeg/remote --republish-meta-key camera/meta/remote
+
+実行例（生の .h264 を保存せず、再生/エンコードのみ）:
+
+    python3 examples/remote_zenoh_tool.py --robot-id rasp-zero-01 --zenoh-config ./zenoh_remote.json5 camera-h264 \
+      --no-raw --play --encode-out ./camera_stream.mp4 --flush
+
+補足:
+- H.264 配信はロボット側で `rpicam-vid` を使用します（bookworm）。
+- `--play` は `ffplay` が必要です（ffmpeg に含まれます）。
+- `--encode-out` は `ffmpeg` が必要です。
+- `--republish-jpeg` は `ffmpeg` が必要です。
+- 低遅延を優先する場合は `--flush` を付けてください。
+
+再生例（保存後）:
+
+    ffplay -fflags nobuffer -flags low_delay -an ./camera_stream.h264
 
 ## 5) lidar を Subscribe（角度ごとの生値 / 正面サマリ）
 

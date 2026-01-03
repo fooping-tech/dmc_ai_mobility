@@ -1,0 +1,18 @@
+[Unit]
+Description=DMC AI Mobility robot node (H.264 test, libcamerify disabled)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/fooping/dmc_ai_mobility
+Environment=VIRTUAL_ENV=/home/fooping/env
+Environment=PATH=/home/fooping/env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/home/fooping/dmc_ai_mobility/src
+Environment=DMC_USE_LIBCAMERIFY=0
+ExecStart=/home/fooping/dmc_ai_mobility/scripts/run_robot.sh /home/fooping/dmc_ai_mobility/config.toml
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

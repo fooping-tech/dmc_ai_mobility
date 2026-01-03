@@ -49,6 +49,20 @@ class CameraConfig:
     width: int = 640
     height: int = 480
     fps: float = 10.0
+    auto_trim: bool = False
+    buffer_size: int = 0
+    latest_only: bool = False
+    jpeg_quality: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class CameraH264Config:
+    enable: bool = False
+    width: int = 640
+    height: int = 480
+    fps: float = 30.0
+    bitrate: int = 2000000
+    chunk_bytes: int = 65536
 
 
 @dataclass(frozen=True)
@@ -74,6 +88,7 @@ class RobotConfig:
     imu: ImuConfig = ImuConfig()
     oled: OledConfig = OledConfig()
     camera: CameraConfig = CameraConfig()
+    camera_h264: CameraH264Config = CameraH264Config()
     lidar: LidarConfig = LidarConfig()
     zenoh: ZenohConfig = ZenohConfig()
 
@@ -92,6 +107,15 @@ def _optional_str(value: Any) -> Optional[str]:
     return text if text else None
 
 
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
 def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> RobotConfig:
     raw: Dict[str, Any] = {}
     if path.exists():
@@ -106,6 +130,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
     imu = _get_section(raw, "imu")
     oled = _get_section(raw, "oled")
     camera = _get_section(raw, "camera")
+    camera_h264 = _get_section(raw, "camera_h264")
     lidar = _get_section(raw, "lidar")
     zenoh = _get_section(raw, "zenoh")
 
@@ -139,6 +164,18 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             width=int(camera.get("width", CameraConfig.width)),
             height=int(camera.get("height", CameraConfig.height)),
             fps=float(camera.get("fps", CameraConfig.fps)),
+            auto_trim=bool(camera.get("auto_trim", CameraConfig.auto_trim)),
+            buffer_size=int(camera.get("buffer_size", CameraConfig.buffer_size)),
+            latest_only=bool(camera.get("latest_only", CameraConfig.latest_only)),
+            jpeg_quality=_optional_int(camera.get("jpeg_quality")),
+        ),
+        camera_h264=CameraH264Config(
+            enable=bool(camera_h264.get("enable", CameraH264Config.enable)),
+            width=int(camera_h264.get("width", CameraH264Config.width)),
+            height=int(camera_h264.get("height", CameraH264Config.height)),
+            fps=float(camera_h264.get("fps", CameraH264Config.fps)),
+            bitrate=int(camera_h264.get("bitrate", CameraH264Config.bitrate)),
+            chunk_bytes=int(camera_h264.get("chunk_bytes", CameraH264Config.chunk_bytes)),
         ),
         lidar=LidarConfig(
             enable=bool(lidar.get("enable", LidarConfig.enable)),

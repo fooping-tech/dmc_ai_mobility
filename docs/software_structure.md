@@ -21,6 +21,7 @@ flowchart TB
     imu["imu.py"]
     oled["oled.py"]
     camera["camera_v4l2.py"]
+    camera_h264["camera_h264.py"]
     lidar["lidar.py"]
   end
 

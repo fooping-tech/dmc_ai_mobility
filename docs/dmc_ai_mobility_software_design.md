@@ -129,6 +129,8 @@ dmc_robo/<robot_id>/<component>/<direction>
 
 - JPEG: `dmc_robo/<robot_id>/camera/image/jpeg`
 - Meta: `dmc_robo/<robot_id>/camera/meta`
+- H.264: `dmc_robo/<robot_id>/camera/video/h264`（任意）
+- H.264 Meta: `dmc_robo/<robot_id>/camera/video/h264/meta`（任意）
 
 #### LiDAR（Publish）
 
@@ -146,6 +148,7 @@ dmc_robo/<robot_id>/<component>/<direction>
 - libcamerify により V4L2 デバイスとして取得
 - OpenCV（cv2.VideoCapture）を使用
 - JPEG エンコード後 Zenoh で Publish
+- オプションで rpicam-vid（bookworm）/libcamera-vid による H.264 ハードウェアエンコード配信を利用可能
 
 ---
 
@@ -209,6 +212,14 @@ device = 0
 width = 640
 height = 480
 fps = 10
+
+[camera_h264]
+enable = false
+width = 640
+height = 480
+fps = 30
+bitrate = 2000000
+chunk_bytes = 65536
 
 [lidar]
 enable = false

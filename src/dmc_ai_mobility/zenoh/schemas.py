@@ -75,5 +75,33 @@ IMU_STATE_SCHEMA = {
 
 CAMERA_META_SCHEMA = {
     "key": "dmc_robo/<robot_id>/camera/meta",
-    "json": {"width": "int", "height": "int", "fps": "number", "seq": "int", "ts_ms": "int"},
+    "json": {
+        "width": "int",
+        "height": "int",
+        "fps": "number",
+        "seq": "int",
+        "ts_ms": "int (publish epoch ms, same as publish_ts_ms)",
+        "capture_ts_ms": "int (capture epoch ms)",
+        "publish_ts_ms": "int (publish epoch ms)",
+        "pipeline_ms": "int (capture->publish latency ms)",
+        "capture_mono_ms": "int (capture monotonic ms)",
+        "publish_mono_ms": "int (publish monotonic ms)",
+        "capture_start_mono_ms": "int (capture start monotonic ms)",
+        "capture_end_mono_ms": "int (capture end monotonic ms)",
+        "read_ms": "int (capture read duration ms)",
+    },
+}
+
+CAMERA_H264_META_SCHEMA = {
+    "key": "dmc_robo/<robot_id>/camera/video/h264/meta",
+    "json": {
+        "codec": "string (h264)",
+        "width": "int",
+        "height": "int",
+        "fps": "number",
+        "bitrate": "int",
+        "seq": "int",
+        "ts_ms": "int (publish epoch ms)",
+        "bytes": "int (payload size)",
+    },
 }

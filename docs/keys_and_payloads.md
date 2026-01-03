@@ -134,7 +134,9 @@ JSON schema:
 
 - Publish (JPEG bytes): `dmc_robo/<robot_id>/camera/image/jpeg`
 - Publish (meta JSON): `dmc_robo/<robot_id>/camera/meta`
-- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `camera_image_jpeg()` / `camera_meta()`
+- Publish (H.264 bytes): `dmc_robo/<robot_id>/camera/video/h264`
+- Publish (H.264 meta JSON): `dmc_robo/<robot_id>/camera/video/h264/meta`
+- 実装: `src/dmc_ai_mobility/zenoh/keys.py` の `camera_image_jpeg()` / `camera_meta()` / `camera_video_h264()` / `camera_video_h264_meta()`
 
 #### camera/image/jpeg
 
@@ -152,14 +154,60 @@ JSON schema:
       "height": 480,
       "fps": 10,
       "seq": 0,
-      "ts_ms": 1735467890123
+      "ts_ms": 1735467890123,
+      "capture_ts_ms": 1735467890110,
+      "publish_ts_ms": 1735467890123,
+      "pipeline_ms": 13,
+      "capture_mono_ms": 123456789,
+      "publish_mono_ms": 123456802,
+      "capture_start_mono_ms": 123456776,
+      "capture_end_mono_ms": 123456789,
+      "read_ms": 13
     }
 
 フィールド:
 - `width` / `height` (int): 画像サイズ
 - `fps` (number): publish 設定上の FPS
 - `seq` (int): 連番
+- `ts_ms` (int): 送信側タイムスタンプ（epoch ms, publish）
+- `capture_ts_ms` (int): 取得時刻（epoch ms, capture）
+- `publish_ts_ms` (int): 送信時刻（epoch ms, publish）
+- `pipeline_ms` (int): capture→publish のレイテンシ（ms）
+- `capture_mono_ms` (int): 取得時刻（monotonic ms）
+- `publish_mono_ms` (int): 送信時刻（monotonic ms）
+- `capture_start_mono_ms` (int): 取得開始時刻（monotonic ms）
+- `capture_end_mono_ms` (int): 取得終了時刻（monotonic ms）
+- `read_ms` (int): 取得開始→終了の時間（ms）
+
+#### camera/video/h264
+
+- payload: H.264 Annex B byte stream (chunked)
+
+#### camera/video/h264/meta
+
+- payload: JSON（UTF-8 bytes）
+
+JSON schema:
+
+    {
+      "codec": "h264",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "bitrate": 2000000,
+      "seq": 0,
+      "ts_ms": 1735467890123,
+      "bytes": 65536
+    }
+
+フィールド:
+- `codec` (string): `h264`
+- `width` / `height` (int): 画像サイズ
+- `fps` (number): 設定上の FPS
+- `bitrate` (int): ビットレート（bps）
+- `seq` (int): 連番
 - `ts_ms` (int): 送信側タイムスタンプ（epoch ms）
+- `bytes` (int): このチャンクのサイズ
 
 ### lidar
 
