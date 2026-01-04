@@ -52,6 +52,22 @@ class OledConfig:
 
 
 @dataclass(frozen=True)
+class OledSettingsConfig:
+    enabled: bool = True
+    cooldown_s: float = 1.0
+    calib_cmd: Optional[str] = None
+    wifi_cmd: Optional[str] = None
+    wifi_ssid: Optional[str] = None
+    wifi_psk_env: Optional[str] = None
+    git_pull_cmd: Optional[str] = None
+    branch_cmd: Optional[str] = None
+    branch_target: Optional[str] = None
+    shutdown_cmd: Optional[str] = None
+    reboot_cmd: Optional[str] = None
+    sudo_cmd: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class CameraConfig:
     enable: bool = True
     device: int = 0
@@ -96,6 +112,7 @@ class RobotConfig:
     motor: MotorConfig = MotorConfig()
     imu: ImuConfig = ImuConfig()
     oled: OledConfig = OledConfig()
+    oled_settings: OledSettingsConfig = OledSettingsConfig()
     camera: CameraConfig = CameraConfig()
     camera_h264: CameraH264Config = CameraH264Config()
     lidar: LidarConfig = LidarConfig()
@@ -138,6 +155,7 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
     motor = _get_section(raw, "motor")
     imu = _get_section(raw, "imu")
     oled = _get_section(raw, "oled")
+    oled_settings = _get_section(raw, "oled_settings")
     camera = _get_section(raw, "camera")
     camera_h264 = _get_section(raw, "camera_h264")
     lidar = _get_section(raw, "lidar")
@@ -175,6 +193,20 @@ def load_config(path: Path, overrides: Optional[Dict[str, Any]] = None) -> Robot
             mode_switch_fps=float(oled.get("mode_switch_fps", OledConfig.mode_switch_fps)),
             eyes_frames_dir=_optional_str(oled.get("eyes_frames_dir")),
             eyes_fps=float(oled.get("eyes_fps", OledConfig.eyes_fps)),
+        ),
+        oled_settings=OledSettingsConfig(
+            enabled=bool(oled_settings.get("enabled", OledSettingsConfig.enabled)),
+            cooldown_s=float(oled_settings.get("cooldown_s", OledSettingsConfig.cooldown_s)),
+            calib_cmd=_optional_str(oled_settings.get("calib_cmd")),
+            wifi_cmd=_optional_str(oled_settings.get("wifi_cmd")),
+            wifi_ssid=_optional_str(oled_settings.get("wifi_ssid")),
+            wifi_psk_env=_optional_str(oled_settings.get("wifi_psk_env")),
+            git_pull_cmd=_optional_str(oled_settings.get("git_pull_cmd")),
+            branch_cmd=_optional_str(oled_settings.get("branch_cmd")),
+            branch_target=_optional_str(oled_settings.get("branch_target")),
+            shutdown_cmd=_optional_str(oled_settings.get("shutdown_cmd")),
+            reboot_cmd=_optional_str(oled_settings.get("reboot_cmd")),
+            sudo_cmd=_optional_str(oled_settings.get("sudo_cmd")),
         ),
         camera=CameraConfig(
             enable=bool(camera.get("enable", CameraConfig.enable)),

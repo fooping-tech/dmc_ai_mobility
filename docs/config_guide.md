@@ -38,6 +38,23 @@ robot_id = "rasp-zero-01"
 - `eyes_frames_dir`: 走行モードの“目”アニメのフレームフォルダ
 - `eyes_fps`: “目”アニメの再生 FPS
 
+## [oled_settings]
+
+設定モード選択時に実行するコマンド群です。未設定の場合はデフォルトのスクリプトが使われます。
+
+- `enabled`: 設定アクションを有効化
+- `cooldown_s`: 連打を抑止するクールダウン秒数
+- `calib_cmd`: キャリブレーション実行コマンド（任意）
+- `wifi_cmd`: Wi‑Fi 接続コマンド（任意）
+- `wifi_ssid`: `wifi_cmd` が未指定の場合に使う SSID
+- `wifi_psk_env`: パスフレーズを読む環境変数名（例: `WIFI_PSK`）
+- `git_pull_cmd`: Git 更新コマンド（任意）
+- `branch_cmd`: ブランチ切替コマンド（任意）
+- `branch_target`: デフォルトのターゲットブランチ名
+- `shutdown_cmd`: シャットダウンコマンド（任意）
+- `reboot_cmd`: 再起動コマンド（任意）
+- `sudo_cmd`: `sudo` を使う場合のコマンド（例: `sudo -n`）
+
 ## [camera]
 
 - `enable`: カメラの有効/無効
@@ -97,6 +114,13 @@ override_s = 2.0
 # mode_switch_fps = 10
 # eyes_frames_dir = "assets/oled/eyes"
 # eyes_fps = 10
+
+[oled_settings]
+enabled = true
+cooldown_s = 1.0
+wifi_ssid = "YourSSID"
+wifi_psk_env = "WIFI_PSK"
+branch_target = "main"
 
 [camera]
 enable = true

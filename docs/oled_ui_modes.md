@@ -87,3 +87,18 @@ python3 tools/oled_preview/render_oled_sequence.py \
 
 - `drive` / `settings` は PIL を使ってテキスト描画するため、`pillow` が必要です。
 - assets が無い場合はテキスト表示にフォールバックします。
+- モード実装は `src/dmc_ai_mobility/app/oled_mode_manager.py` の登録方式で拡張できます（詳細: `docs/oled_mode_manager.md`）。
+- SW1/SW2 が有効な場合は `robot_node.py` が入力を監視し、SW1 でモード/項目移動、SW2 で決定、SW2 長押しで戻る動作を行います。
+
+## Settings アクション
+
+`settings` で選択した項目は `robot_node.py` の settings action runner によって実処理に接続されます。
+
+- `CALIB`: モーターキャリブレーションを起動
+- `WIFI`: Wi‑Fi 接続コマンドを実行
+- `GIT PULL`: `scripts/pull_and_restart.sh` を実行
+- `BRANCH`: ブランチ切り替えスクリプトを実行
+- `SHUTDOWN`: シャットダウン
+- `REBOOT`: 再起動
+
+実行コマンドや Wi‑Fi/ブランチの設定は `[oled_settings]` で上書きできます（詳細: `docs/oled_settings_actions.md`）。

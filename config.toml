@@ -49,6 +49,20 @@ default_mode = "legacy"
 # eyes_frames_dir = "assets/oled/eyes"
 # eyes_fps = 10
 
+[oled_settings]
+enabled = true
+cooldown_s = 1.0
+# calib_cmd = "python3 -m dmc_ai_mobility.calibration.motor"
+# wifi_cmd = "scripts/oled_wifi_connect.sh"
+# wifi_ssid = "YourSSID"
+# wifi_psk_env = "WIFI_PSK"
+# git_pull_cmd = "scripts/pull_and_restart.sh"
+# branch_cmd = "scripts/oled_switch_branch.sh"
+# branch_target = "main"
+# shutdown_cmd = "systemctl poweroff"
+# reboot_cmd = "systemctl reboot"
+# sudo_cmd = "sudo -n"
+
 [camera]
 enable = false
 device = 0
