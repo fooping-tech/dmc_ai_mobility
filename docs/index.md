@@ -16,6 +16,8 @@ Zenoh を通信基盤とし、以下を扱います。
 - [Software Design](dmc_ai_mobility_software_design.md)
 - [Calibration](calibration.md)
 
+モーター補正は `v_start` と 3 点の `trim_points`（low/mid/high）を使う 4 点方式です。詳細は Calibration を参照してください。
+
 ## 通信・API
 - [Zenoh Keys and Payloads](keys_and_payloads.md)
 - [Zenoh Remote Pub/Sub](zenoh_remote_pubsub.md)
