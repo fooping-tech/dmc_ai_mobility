@@ -2,7 +2,7 @@
 
 OLED の `settings` モードで選択された項目は、`OledSettingsActionRunner` を通じて実処理に接続されます。
 操作は `SW1` 長押しで `OK?` 確認に入り、確認中に `SW1` で実行、`SW2` でキャンセルです。
-`SHUTDOWN` / `REBOOT` の実行時は、OLED に `SHUTDOWN now...` / `REBOOT now...` を一時表示します。
+`GIT PULL` / `SHUTDOWN` / `REBOOT` の実行時は、OLED に実行ステータス（例: `GIT PULL running...`）を一時表示します。
 
 ## 対応アクション
 

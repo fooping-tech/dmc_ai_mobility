@@ -29,8 +29,15 @@ SETTINGS_LABEL_TO_ACTION = {
 }
 
 ACTION_TO_STATUS_TEXT = {
+    ACTION_GIT_PULL: "GIT PULL\nrunning...",
     ACTION_SHUTDOWN: "SHUTDOWN\nnow...",
     ACTION_REBOOT: "REBOOT\nnow...",
+}
+
+ACTION_TO_STATUS_DURATION_MS = {
+    ACTION_GIT_PULL: 8000,
+    ACTION_SHUTDOWN: 3000,
+    ACTION_REBOOT: 3000,
 }
 
 
@@ -49,6 +56,17 @@ def get_settings_item_status_text(item: str) -> Optional[str]:
     if not action:
         return None
     return get_action_status_text(action)
+
+
+def get_action_status_duration_ms(action: str) -> Optional[int]:
+    return ACTION_TO_STATUS_DURATION_MS.get(str(action).strip().lower())
+
+
+def get_settings_item_status_duration_ms(item: str) -> Optional[int]:
+    action = SETTINGS_LABEL_TO_ACTION.get(str(item).strip().upper())
+    if not action:
+        return None
+    return get_action_status_duration_ms(action)
 
 
 class OledSettingsActionRunner:

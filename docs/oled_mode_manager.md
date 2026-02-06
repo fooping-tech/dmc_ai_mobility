@@ -72,6 +72,6 @@ SW1/SW2 の扱いは `src/dmc_ai_mobility/app/robot_node.py` の button loop に
 - `settings` 中: `SW1` 長押しで確認表示（`OK?`）に遷移
 - 確認表示中: `SW1` で実行、`SW2` でキャンセル（settings に戻る）
 - `settings` 中: `SW2` 長押しで直前の非 settings モードへ戻る
-- `SHUTDOWN` / `REBOOT` 実行時は OLED に実行ステータス（`... now...`）を一時表示
+- `GIT PULL` / `SHUTDOWN` / `REBOOT` 実行時は OLED に実行ステータス（`... running...` / `... now...`）を一時表示
 
 settings の「決定」は `OledSettingsActionRunner` が実処理に接続します（`robot_node.py` で呼び出し）。
