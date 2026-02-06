@@ -36,14 +36,28 @@ from dmc_ai_mobility.zenoh.session import ZenohOpenOptions, open_session
 logger = logging.getLogger(__name__)
 
 
-def _load_motor_trim(path: Path) -> float:
+def _load_motor_config(path: Path) -> dict:
+    """Load motor calibration config.
+
+    Backward compatible:
+    - legacy: {"trim": <float>}
+    - new:
+      {
+        "v_start": 0.10,
+        "trim_points": [
+          {"v": 0.10, "trim": 0.00, "label": "start"},
+          {"v": 0.15, "trim": 0.00, "label": "low"},
+          {"v": 0.30, "trim": 0.00, "label": "mid"},
+          {"v": 0.50, "trim": 0.00, "label": "high"}
+        ]
+      }
+    """
     try:
         if not path.exists():
-            return 0.0
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return float(data.get("trim") or 0.0)
+            return {}
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return 0.0
+        return {}
 
 
 def _lidar_front_distance(points: list[dict], *, window_deg: float, stat: str) -> Optional[tuple[float, int]]:
@@ -83,14 +97,43 @@ def run_robot(
     session = open_session(dry_run=dry_run, options=zenoh_cfg)
 
     # デフォルトは mock ドライバ（dry_run や初期化失敗時でもプロセスを起動できるようにする）。
-    trim = 0.0
+    motor_cal = {}
     if not dry_run:
-        # モーターの左右差補正（任意）。存在しない場合は 0.0 として扱う。
-        trim = _load_motor_trim(Path("configs/motor_config.json"))
+        # モーターの左右差補正（任意）。存在しない場合は空として扱う。
+        motor_cal = _load_motor_config(Path("configs/motor_config.json"))
+
+    # legacy single trim
+    trim = float(motor_cal.get("trim") or 0.0) if isinstance(motor_cal, dict) else 0.0
+
+    # optional multi-point trim table
+    trim_points: Optional[list[tuple[float, float]]] = None
+    v_start = 0.0
+    if isinstance(motor_cal, dict):
+        v_start = float(motor_cal.get("v_start") or 0.0)
+        tps = motor_cal.get("trim_points")
+        if isinstance(tps, list) and tps:
+            pts: list[tuple[float, float]] = []
+            for it in tps:
+                if not isinstance(it, dict):
+                    continue
+                try:
+                    v = float(it.get("v"))
+                    t = float(it.get("trim"))
+                except Exception:
+                    continue
+                if v < 0:
+                    continue
+                pts.append((v, t))
+            pts.sort(key=lambda x: x[0])
+            if pts:
+                trim_points = pts
+
     motor_cfg = PigpioMotorConfig(
         pin_l=config.gpio.pin_l,
         pin_r=config.gpio.pin_r,
         trim=trim,
+        trim_points=trim_points,
+        v_start=v_start,
         deadband_pw=int(config.motor.deadband_pw),
         print_pulsewidth=print_motor_pw,
     )

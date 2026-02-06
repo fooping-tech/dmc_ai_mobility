@@ -26,6 +26,16 @@ dist/
 # Logs
 *.log
 
+# Generated media / experiment artifacts
+*.png
+*.jpg
+*.jpeg
+*.csv
+*.mp4
+*.h264
+exit_scan_*/
+door_approach_*/
+
 # Calibration outputs (often generated in repo root)
 imu_config.json
 motor_config.json

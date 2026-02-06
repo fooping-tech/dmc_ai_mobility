@@ -29,15 +29,47 @@ class MotorPulsewidth:
     pw_r_clamped: int
 
 
+def _interp_trim(points: list[tuple[float, float]], v_abs: float) -> float:
+    # points: sorted by v
+    if not points:
+        return 0.0
+    if v_abs <= points[0][0]:
+        return float(points[0][1])
+    if v_abs >= points[-1][0]:
+        return float(points[-1][1])
+    for (v0, t0), (v1, t1) in zip(points, points[1:]):
+        if v0 <= v_abs <= v1:
+            if v1 - v0 <= 1e-9:
+                return float(t1)
+            a = (v_abs - v0) / (v1 - v0)
+            return float((1.0 - a) * t0 + a * t1)
+    return float(points[-1][1])
+
+
 def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> MotorPulsewidth:
     # Hardware mapping is project-specific; this provides a safe, simple placeholder:
     # - both motors centered at neutral pulse width
     # - apply trim and invert right channel as in calibration script conventions
+
+    # Ensure each wheel overcomes stiction if commanded non-zero.
+    v_start = float(getattr(cfg, "v_start", 0.0) or 0.0)
+    if v_start > 0:
+        if 0.0 < abs(v_l) < v_start:
+            v_l = (1.0 if v_l >= 0 else -1.0) * v_start
+        if 0.0 < abs(v_r) < v_start:
+            v_r = (1.0 if v_r >= 0 else -1.0) * v_start
+
+    # Determine trim value based on speed magnitude.
+    trim = float(cfg.trim or 0.0)
+    if cfg.trim_points:
+        v_abs = float((abs(v_l) + abs(v_r)) * 0.5)
+        trim = _interp_trim(list(cfg.trim_points), v_abs)
+
     v_l_adj = v_l
     v_r_adj = v_r
-    if cfg.trim:
-        v_l_adj = v_l * (1.0 - cfg.trim)
-        v_r_adj = v_r * (1.0 + cfg.trim)
+    if trim:
+        v_l_adj = v_l * (1.0 - trim)
+        v_r_adj = v_r * (1.0 + trim)
 
     pw_l_raw = int(cfg.neutral_pw + v_l_adj * cfg.gain_pw_per_unit)
     pw_r_raw = int(cfg.neutral_pw - v_r_adj * cfg.gain_pw_per_unit)
@@ -98,7 +130,14 @@ class MockMotorDriver:
 class PigpioMotorConfig:
     pin_l: int = 19
     pin_r: int = 12
+    # Legacy single trim (used when trim_points is not provided).
     trim: float = 0.0
+    # Optional piecewise trim by speed (m/s). List of (v_mps, trim) sorted by v.
+    # trim > 0 means "left motor stronger" so we boost right / reduce left.
+    trim_points: Optional[list[tuple[float, float]]] = None
+    # Optional minimum commanded speed magnitude to overcome stiction/deadband.
+    v_start: float = 0.0
+
     neutral_pw: int = 1500
     gain_pw_per_unit: float = 500.0
     deadband_pw: int = 0
