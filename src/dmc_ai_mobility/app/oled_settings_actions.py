@@ -7,7 +7,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from dmc_ai_mobility.core.config import OledSettingsConfig, RobotConfig
 from dmc_ai_mobility.core.timing import monotonic_ms
@@ -47,6 +47,14 @@ class ResolvedCommand:
     env: dict[str, str]
 
 
+@dataclass(frozen=True)
+class ActionEvent:
+    action: str
+    status: str
+    returncode: Optional[int] = None
+    reason: Optional[str] = None
+
+
 def get_action_status_text(action: str) -> Optional[str]:
     return ACTION_TO_STATUS_TEXT.get(str(action).strip().lower())
 
@@ -76,11 +84,13 @@ class OledSettingsActionRunner:
         config: RobotConfig,
         logger: logging.Logger,
         dry_run: bool = False,
+        on_event: Optional[Callable[[ActionEvent], None]] = None,
     ) -> None:
         self._config = config
         self._settings = config.oled_settings
         self._logger = logger
         self._dry_run = dry_run
+        self._on_event = on_event
         self._lock = threading.Lock()
         self._in_progress = False
         self._last_action_ms = 0
@@ -90,21 +100,25 @@ class OledSettingsActionRunner:
         action = SETTINGS_LABEL_TO_ACTION.get(str(item).strip().upper())
         if not action:
             self._logger.warning("unknown settings item: %s", item)
+            self._emit(ActionEvent(action="unknown", status="rejected", reason="unknown_item"))
             return False
         return self.trigger(action)
 
     def trigger(self, action: str) -> bool:
         if not self._settings.enabled:
             self._logger.info("settings actions disabled; ignoring %s", action)
+            self._emit(ActionEvent(action=action, status="rejected", reason="disabled"))
             return False
         now = monotonic_ms()
         cooldown_ms = int(max(float(self._settings.cooldown_s), 0.0) * 1000.0)
         with self._lock:
             if self._in_progress:
                 self._logger.info("settings action busy; ignoring %s", action)
+                self._emit(ActionEvent(action=action, status="rejected", reason="busy"))
                 return False
             if cooldown_ms and now - self._last_action_ms < cooldown_ms:
                 self._logger.info("settings action cooldown; ignoring %s", action)
+                self._emit(ActionEvent(action=action, status="rejected", reason="cooldown"))
                 return False
             self._in_progress = True
         thread = threading.Thread(
@@ -121,11 +135,14 @@ class OledSettingsActionRunner:
             resolved = self._resolve_command(action)
             if resolved is None:
                 self._logger.warning("settings action not configured: %s", action)
+                self._emit(ActionEvent(action=action, status="failed", reason="not_configured"))
                 return
             if self._dry_run:
                 self._logger.info("settings action dry-run: %s -> %s", action, resolved.argv)
+                self._emit(ActionEvent(action=action, status="done", reason="dry_run"))
                 return
             self._logger.info("settings action start: %s", action)
+            self._emit(ActionEvent(action=action, status="started"))
             result = subprocess.run(
                 resolved.argv,
                 cwd=self._repo_root,
@@ -134,14 +151,26 @@ class OledSettingsActionRunner:
             )
             if result.returncode != 0:
                 self._logger.warning("settings action failed: %s (code=%s)", action, result.returncode)
+                self._emit(ActionEvent(action=action, status="failed", returncode=int(result.returncode)))
             else:
                 self._logger.info("settings action done: %s", action)
+                self._emit(ActionEvent(action=action, status="done", returncode=0))
         except Exception as e:
             self._logger.warning("settings action error: %s (%s)", action, e)
+            self._emit(ActionEvent(action=action, status="failed", reason="exception"))
         finally:
             with self._lock:
                 self._in_progress = False
                 self._last_action_ms = monotonic_ms()
+
+    def _emit(self, event: ActionEvent) -> None:
+        cb = self._on_event
+        if cb is None:
+            return
+        try:
+            cb(event)
+        except Exception as e:
+            self._logger.debug("settings action event callback failed: %s", e)
 
     def _resolve_command(self, action: str) -> Optional[ResolvedCommand]:
         settings = self._settings

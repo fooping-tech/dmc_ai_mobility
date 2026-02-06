@@ -14,6 +14,7 @@ from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_cloc
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd, OledModeCmd
 from dmc_ai_mobility.app.oled_mode_manager import OledModeManager, OLED_MODE_DRIVE, OLED_MODE_SETTINGS
 from dmc_ai_mobility.app.oled_settings_actions import (
+    ActionEvent,
     OledSettingsActionRunner,
     get_settings_item_status_duration_ms,
     get_settings_item_status_text,
@@ -295,7 +296,28 @@ def run_robot(
     oled_height = int(config.oled.height)
     oled_expected_len = mono1_buf_len(oled_width, oled_height)
     oled_manager = OledModeManager(oled=oled, config=config, robot_id=robot_id, logger=logger)
-    settings_actions = OledSettingsActionRunner(config=config, logger=logger, dry_run=dry_run)
+
+    def on_settings_action_event(event: ActionEvent) -> None:
+        if event.action != "git_pull":
+            return
+        if event.status == "done":
+            set_oled_text_override("GIT PULL\nOK", duration_ms=max(oled_override_ms, 3000))
+            return
+        if event.status == "failed":
+            text = "GIT PULL\nFAILED"
+            if event.returncode is not None:
+                text = f"GIT PULL\nFAILED({int(event.returncode)})"
+            set_oled_text_override(text, duration_ms=max(oled_override_ms, 5000))
+            return
+        if event.status == "rejected":
+            set_oled_text_override("GIT PULL\nSKIPPED", duration_ms=max(oled_override_ms, 3000))
+
+    settings_actions = OledSettingsActionRunner(
+        config=config,
+        logger=logger,
+        dry_run=dry_run,
+        on_event=on_settings_action_event,
+    )
     last_non_settings_mode = oled_manager.get_mode()
 
     def on_oled_image_mono1(payload: bytes) -> None:
