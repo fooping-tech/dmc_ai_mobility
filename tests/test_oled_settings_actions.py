@@ -14,8 +14,10 @@ from dmc_ai_mobility.app.oled_settings_actions import (  # noqa: E402
     ACTION_GIT_PULL,
     ActionEvent,
     OledSettingsActionRunner,
+    get_action_failure_status_text,
     get_action_status_duration_ms,
     get_action_status_text,
+    infer_action_failure_reason,
     get_settings_item_status_duration_ms,
     get_settings_item_status_text,
 )
@@ -45,6 +47,28 @@ class TestOledSettingsActions(unittest.TestCase):
         self.assertEqual(get_action_status_duration_ms("git_pull"), 8000)
         self.assertEqual(get_action_status_duration_ms("shutdown"), 3000)
         self.assertEqual(get_action_status_duration_ms("reboot"), 3000)
+
+    def test_action_failure_status_text_for_git_pull(self) -> None:
+        self.assertEqual(
+            get_action_failure_status_text("git_pull", reason="dirty", returncode=1),
+            "GIT PULL\nDIRTY",
+        )
+        self.assertEqual(
+            get_action_failure_status_text("git_pull", reason="exit_code", returncode=1),
+            "GIT PULL\nFAILED(1)",
+        )
+
+    def test_infer_action_failure_reason_from_output(self) -> None:
+        reason = infer_action_failure_reason(
+            "git_pull",
+            returncode=1,
+            stderr="Working tree is dirty. Commit/stash changes or set ALLOW_DIRTY=1.",
+        )
+        self.assertEqual(reason, "dirty")
+        self.assertEqual(
+            infer_action_failure_reason("git_pull", returncode=1, stderr="Non-fast-forward update detected; aborting."),
+            "non_fast_forward",
+        )
 
     def test_settings_item_status_duration_ms_for_supported_items(self) -> None:
         self.assertEqual(get_settings_item_status_duration_ms("GIT PULL"), 8000)
@@ -82,6 +106,26 @@ class TestOledSettingsActions(unittest.TestCase):
         self.assertEqual(events[-1].action, ACTION_BRANCH)
         self.assertEqual(events[-1].status, "failed")
         self.assertEqual(events[-1].reason, "not_configured")
+
+    def test_runner_emits_failed_reason_for_git_pull_dirty(self) -> None:
+        events: list[ActionEvent] = []
+        cfg = RobotConfig(
+            oled_settings=OledSettingsConfig(
+                cooldown_s=0.0,
+                git_pull_cmd="bash -lc 'echo Working tree is dirty. >&2; exit 1'",
+            )
+        )
+        runner = OledSettingsActionRunner(
+            config=cfg,
+            logger=logging.getLogger("test_oled_settings_actions"),
+            dry_run=False,
+            on_event=events.append,
+        )
+        self.assertTrue(runner.trigger(ACTION_GIT_PULL))
+        self._wait_events(events, 2)
+        failed = [ev for ev in events if ev.action == ACTION_GIT_PULL and ev.status == "failed"]
+        self.assertGreaterEqual(len(failed), 1)
+        self.assertEqual(failed[-1].reason, "dirty")
 
     def test_runner_emits_rejected_event_when_disabled(self) -> None:
         events: list[ActionEvent] = []

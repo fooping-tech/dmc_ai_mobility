@@ -16,6 +16,7 @@ from dmc_ai_mobility.app.oled_mode_manager import OledModeManager, OLED_MODE_DRI
 from dmc_ai_mobility.app.oled_settings_actions import (
     ActionEvent,
     OledSettingsActionRunner,
+    get_action_failure_status_text,
     get_settings_item_status_duration_ms,
     get_settings_item_status_text,
 )
@@ -304,13 +305,20 @@ def run_robot(
             set_oled_text_override("GIT PULL\nOK", duration_ms=max(oled_override_ms, 3000))
             return
         if event.status == "failed":
-            text = "GIT PULL\nFAILED"
-            if event.returncode is not None:
-                text = f"GIT PULL\nFAILED({int(event.returncode)})"
+            text = get_action_failure_status_text(
+                event.action,
+                reason=event.reason,
+                returncode=event.returncode,
+            ) or "GIT PULL\nFAILED"
             set_oled_text_override(text, duration_ms=max(oled_override_ms, 5000))
             return
         if event.status == "rejected":
-            set_oled_text_override("GIT PULL\nSKIPPED", duration_ms=max(oled_override_ms, 3000))
+            text = get_action_failure_status_text(
+                event.action,
+                reason=event.reason,
+                returncode=event.returncode,
+            ) or "GIT PULL\nSKIPPED"
+            set_oled_text_override(text, duration_ms=max(oled_override_ms, 3000))
 
     settings_actions = OledSettingsActionRunner(
         config=config,

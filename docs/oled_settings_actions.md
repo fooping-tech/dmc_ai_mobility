@@ -3,7 +3,7 @@
 OLED の `settings` モードで選択された項目は、`OledSettingsActionRunner` を通じて実処理に接続されます。
 操作は `SW1` 長押しで `OK?` 確認に入り、確認中に `SW1` で実行、`SW2` でキャンセルです。
 `GIT PULL` / `SHUTDOWN` / `REBOOT` の実行時は、OLED に実行ステータスを一時表示します。  
-`GIT PULL` は開始時に `running...`、完了時に `OK`、失敗時に `FAILED`（終了コード付き）を表示します。
+`GIT PULL` は開始時に `running...`、完了時に `OK`、失敗時に理由テキスト（例: `DIRTY`, `NON-FF`, `NO-SUDO`）を表示し、判定できない場合は `FAILED(<code>)` を表示します。
 
 ## 対応アクション
 

@@ -44,7 +44,7 @@ Zenoh を通信基盤とし、以下を扱います。
 - [OLED 設定アクション](oled_settings_actions.md)
 - [OLED アニメーションエディタ](oled_anim_editor.md)
 
-待機中の SW 操作は通常モードで `SW1=次` / `SW2=前`、settings では `SW1=次項目` / `SW2=前項目`（循環）です。項目実行は `SW1` 長押し後の `OK?` 確認で行い、`GIT PULL` / `SHUTDOWN` / `REBOOT` 実行時は OLED に実行中ステータスを表示します。`GIT PULL` は完了時に `OK` / `FAILED` まで表示します。
+待機中の SW 操作は通常モードで `SW1=次` / `SW2=前`、settings では `SW1=次項目` / `SW2=前項目`（循環）です。項目実行は `SW1` 長押し後の `OK?` 確認で行い、`GIT PULL` / `SHUTDOWN` / `REBOOT` 実行時は OLED に実行中ステータスを表示します。`GIT PULL` は完了時に `OK` または失敗理由（例: `DIRTY`）まで表示します。
 
 `examples/remote_zenoh_ui.py` は H.264 の受信映像と、リモート側 JPEG（`camera/image/jpeg/remote`）を並べて表示できます（PySide6/pyqtgraph と ffmpeg が必要）。
 

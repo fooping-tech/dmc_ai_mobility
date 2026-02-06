@@ -40,6 +40,22 @@ ACTION_TO_STATUS_DURATION_MS = {
     ACTION_REBOOT: 3000,
 }
 
+GIT_PULL_REASON_TO_STATUS = {
+    "dirty": "DIRTY",
+    "non_fast_forward": "NON-FF",
+    "detached_head": "DETACHED",
+    "remote_missing": "NO-REMOTE",
+    "no_sudo": "NO-SUDO",
+    "systemctl_missing": "NO-SYSTEMCTL",
+    "not_git_repo": "NO-REPO",
+    "git_missing": "NO-GIT",
+    "not_configured": "NO-CONFIG",
+    "busy": "BUSY",
+    "cooldown": "COOLDOWN",
+    "disabled": "DISABLED",
+    "exception": "ERROR",
+}
+
 
 @dataclass(frozen=True)
 class ResolvedCommand:
@@ -75,6 +91,55 @@ def get_settings_item_status_duration_ms(item: str) -> Optional[int]:
     if not action:
         return None
     return get_action_status_duration_ms(action)
+
+
+def get_action_failure_status_text(
+    action: str,
+    *,
+    reason: Optional[str] = None,
+    returncode: Optional[int] = None,
+) -> Optional[str]:
+    if str(action).strip().lower() != ACTION_GIT_PULL:
+        return None
+    if reason:
+        label = GIT_PULL_REASON_TO_STATUS.get(str(reason).strip().lower())
+        if label:
+            return f"GIT PULL\n{label}"
+    if returncode is not None:
+        return f"GIT PULL\nFAILED({int(returncode)})"
+    return "GIT PULL\nFAILED"
+
+
+def infer_action_failure_reason(
+    action: str,
+    *,
+    returncode: int,
+    stdout: str = "",
+    stderr: str = "",
+) -> Optional[str]:
+    act = str(action).strip().lower()
+    if int(returncode) == 0:
+        return None
+    if act not in {ACTION_GIT_PULL, ACTION_BRANCH}:
+        return "exit_code"
+    out = f"{stdout}\n{stderr}".lower()
+    if "working tree is dirty" in out:
+        return "dirty"
+    if "non-fast-forward update detected" in out:
+        return "non_fast_forward"
+    if "detached head" in out:
+        return "detached_head"
+    if "remote branch not found" in out:
+        return "remote_missing"
+    if "run as root or set sudo=sudo" in out:
+        return "no_sudo"
+    if "systemctl not found" in out:
+        return "systemctl_missing"
+    if "not a git repository" in out:
+        return "not_git_repo"
+    if "git not found" in out:
+        return "git_missing"
+    return "exit_code"
 
 
 class OledSettingsActionRunner:
@@ -148,10 +213,32 @@ class OledSettingsActionRunner:
                 cwd=self._repo_root,
                 env=resolved.env,
                 check=False,
+                capture_output=True,
+                text=True,
             )
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    self._logger.info("settings action output: %s", line)
+            if result.stderr:
+                log_fn = self._logger.warning if result.returncode != 0 else self._logger.info
+                for line in result.stderr.splitlines():
+                    log_fn("settings action output: %s", line)
             if result.returncode != 0:
+                reason = infer_action_failure_reason(
+                    action,
+                    returncode=int(result.returncode),
+                    stdout=result.stdout or "",
+                    stderr=result.stderr or "",
+                )
                 self._logger.warning("settings action failed: %s (code=%s)", action, result.returncode)
-                self._emit(ActionEvent(action=action, status="failed", returncode=int(result.returncode)))
+                self._emit(
+                    ActionEvent(
+                        action=action,
+                        status="failed",
+                        returncode=int(result.returncode),
+                        reason=reason,
+                    )
+                )
             else:
                 self._logger.info("settings action done: %s", action)
                 self._emit(ActionEvent(action=action, status="done", returncode=0))
