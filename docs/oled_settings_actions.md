@@ -1,6 +1,7 @@
 # OLED 設定アクション
 
 OLED の `settings` モードで選択された項目は、`OledSettingsActionRunner` を通じて実処理に接続されます。
+操作は `SW1` 長押しで `OK?` 確認に入り、確認中に `SW1` で実行、`SW2` でキャンセルです。
 
 ## 対応アクション
 

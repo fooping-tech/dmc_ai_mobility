@@ -77,6 +77,7 @@ class OledModeManager:
         self._default_mode = default_mode
         self._mode = default_mode
         self._settings_index = 0
+        self._settings_confirm_item: Optional[str] = None
         self._mode_switch = _ModeSwitchState()
         self._welcome_start_ms = 0
         self._welcome_next_mode = self._default_mode
@@ -152,15 +153,38 @@ class OledModeManager:
         if not OLED_SETTINGS_ITEMS:
             return
         with self._lock:
-            idx = self._settings_index + int(delta)
-            self._settings_index = max(0, min(idx, len(OLED_SETTINGS_ITEMS) - 1))
+            self._settings_index = (self._settings_index + int(delta)) % len(OLED_SETTINGS_ITEMS)
+            self._settings_confirm_item = None
 
     def get_settings_item(self) -> Optional[str]:
         if not OLED_SETTINGS_ITEMS:
             return None
         with self._lock:
-            idx = max(0, min(self._settings_index, len(OLED_SETTINGS_ITEMS) - 1))
+            idx = self._settings_index % len(OLED_SETTINGS_ITEMS)
             return OLED_SETTINGS_ITEMS[idx]
+
+    def begin_settings_confirm(self) -> Optional[str]:
+        if not OLED_SETTINGS_ITEMS:
+            return None
+        with self._lock:
+            idx = self._settings_index % len(OLED_SETTINGS_ITEMS)
+            item = OLED_SETTINGS_ITEMS[idx]
+            self._settings_confirm_item = item
+            return item
+
+    def pop_settings_confirm_item(self) -> Optional[str]:
+        with self._lock:
+            item = self._settings_confirm_item
+            self._settings_confirm_item = None
+            return item
+
+    def cancel_settings_confirm(self) -> None:
+        with self._lock:
+            self._settings_confirm_item = None
+
+    def is_settings_confirming(self) -> bool:
+        with self._lock:
+            return bool(self._settings_confirm_item)
 
     def set_mode(
         self,
@@ -178,6 +202,8 @@ class OledModeManager:
         with self._lock:
             if settings_index is not None and OLED_SETTINGS_ITEMS:
                 self._settings_index = max(0, min(int(settings_index), len(OLED_SETTINGS_ITEMS) - 1))
+            if mode != OLED_MODE_SETTINGS:
+                self._settings_confirm_item = None
             if mode == OLED_MODE_WELCOME:
                 self._welcome_start_ms = now
                 self._welcome_next_mode = self._default_mode
@@ -323,6 +349,28 @@ class OledModeManager:
         del motor_cmd, motor_cmd_ms, motor_deadman_ms
         with self._lock:
             settings_index = self._settings_index
+            settings_confirm_item = self._settings_confirm_item
+        if settings_confirm_item:
+            lines = (
+                f"OK? {settings_confirm_item}",
+                "SW1:OK SW2:RET",
+            )
+            try:
+                overlay = render_text_overlay(
+                    None,
+                    width=self._oled_width,
+                    height=self._oled_height,
+                    lines=lines,
+                    font_size=10,
+                    line_spacing=1,
+                )
+                if overlay is not None:
+                    self._oled.show_mono1(overlay)
+                else:
+                    self._oled.show_text("\n".join(lines))
+            except Exception as e:
+                self._logger.warning("oled settings confirm render failed: %s", e)
+            return
         page_size = 2
         safe_index = max(0, min(int(settings_index), len(OLED_SETTINGS_ITEMS) - 1))
         page_start = (safe_index // page_size) * page_size

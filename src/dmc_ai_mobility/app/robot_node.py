@@ -422,34 +422,47 @@ def run_robot(
         sw2_press_start: Optional[int] = None
 
         def handle_sw1_short() -> None:
+            nonlocal last_non_settings_mode
             mode = oled_manager.get_mode()
             if mode == OLED_MODE_SETTINGS:
-                oled_manager.step_settings_index(1)
+                if oled_manager.is_settings_confirming():
+                    item = oled_manager.pop_settings_confirm_item()
+                    if item:
+                        handled = settings_actions.trigger_item(item)
+                        if not handled:
+                            logger.info("settings confirm: %s (no action)", item)
+                else:
+                    oled_manager.step_settings_index(1)
             else:
+                last_non_settings_mode = mode
                 oled_manager.cycle_mode(1)
 
         def handle_sw1_long() -> None:
             mode = oled_manager.get_mode()
             if mode == OLED_MODE_SETTINGS:
-                oled_manager.step_settings_index(-1)
-            else:
-                oled_manager.cycle_mode(-1)
+                item = oled_manager.begin_settings_confirm()
+                if item:
+                    logger.info("settings confirm: %s", item)
 
         def handle_sw2_short() -> None:
             nonlocal last_non_settings_mode
             mode = oled_manager.get_mode()
             if mode == OLED_MODE_SETTINGS:
-                item = oled_manager.get_settings_item()
-                if item:
-                    handled = settings_actions.trigger_item(item)
-                    if not handled:
-                        logger.info("settings select: %s (no action)", item)
+                if oled_manager.is_settings_confirming():
+                    oled_manager.cancel_settings_confirm()
+                    logger.info("settings confirm cancelled")
+                else:
+                    oled_manager.step_settings_index(-1)
                 return
             last_non_settings_mode = mode
-            oled_manager.set_mode(OLED_MODE_SETTINGS)
+            oled_manager.cycle_mode(-1)
 
         def handle_sw2_long() -> None:
             nonlocal last_non_settings_mode
+            mode = oled_manager.get_mode()
+            if mode != OLED_MODE_SETTINGS:
+                return
+            oled_manager.cancel_settings_confirm()
             target = last_non_settings_mode or oled_manager.get_mode()
             if target == OLED_MODE_SETTINGS:
                 target = OLED_MODE_DRIVE
