@@ -13,7 +13,7 @@ from dmc_ai_mobility.core.oled_bitmap import mono1_buf_len
 from dmc_ai_mobility.core.timing import PeriodicSleeper, monotonic_ms, wall_clock_ms
 from dmc_ai_mobility.core.types import MotorCmd, OledCmd, OledModeCmd
 from dmc_ai_mobility.app.oled_mode_manager import OledModeManager, OLED_MODE_DRIVE, OLED_MODE_SETTINGS
-from dmc_ai_mobility.app.oled_settings_actions import OledSettingsActionRunner
+from dmc_ai_mobility.app.oled_settings_actions import OledSettingsActionRunner, get_settings_item_status_text
 from dmc_ai_mobility.drivers.camera_h264 import (
     LibcameraH264Config,
     LibcameraH264Driver,
@@ -267,8 +267,17 @@ def run_robot(
     oled_override_text: str = ""
     oled_override_mono1: bytes = b""
     oled_override_ms = int(max(float(config.oled.override_s), 0.0) * 1000.0)
-    def on_oled_cmd(data: dict) -> None:
+
+    def set_oled_text_override(text: str, *, duration_ms: Optional[int] = None) -> None:
         nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        ttl_ms = oled_override_ms if duration_ms is None else max(int(duration_ms), 0)
+        with oled_override_lock:
+            oled_override_kind = "text"
+            oled_override_text = text
+            oled_override_mono1 = b""
+            oled_override_until_ms = monotonic_ms() + ttl_ms
+
+    def on_oled_cmd(data: dict) -> None:
         try:
             cmd = OledCmd.from_dict(data)
         except Exception as e:
@@ -276,11 +285,7 @@ def run_robot(
             return
         if log_all_cmd:
             logger.info("oled cmd (recv): text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
-        with oled_override_lock:
-            oled_override_kind = "text"
-            oled_override_text = cmd.text
-            oled_override_mono1 = b""
-            oled_override_until_ms = monotonic_ms() + oled_override_ms
+        set_oled_text_override(cmd.text)
 
     oled_width = int(config.oled.width)
     oled_height = int(config.oled.height)
@@ -428,9 +433,13 @@ def run_robot(
                 if oled_manager.is_settings_confirming():
                     item = oled_manager.pop_settings_confirm_item()
                     if item:
+                        status_text = get_settings_item_status_text(item)
                         handled = settings_actions.trigger_item(item)
                         if not handled:
                             logger.info("settings confirm: %s (no action)", item)
+                        elif status_text:
+                            # Keep status visible longer for critical operations.
+                            set_oled_text_override(status_text, duration_ms=max(oled_override_ms, 3000))
                 else:
                     oled_manager.step_settings_index(1)
             else:

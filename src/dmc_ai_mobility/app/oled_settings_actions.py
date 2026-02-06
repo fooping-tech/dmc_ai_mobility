@@ -28,11 +28,27 @@ SETTINGS_LABEL_TO_ACTION = {
     "REBOOT": ACTION_REBOOT,
 }
 
+ACTION_TO_STATUS_TEXT = {
+    ACTION_SHUTDOWN: "SHUTDOWN\nnow...",
+    ACTION_REBOOT: "REBOOT\nnow...",
+}
+
 
 @dataclass(frozen=True)
 class ResolvedCommand:
     argv: list[str]
     env: dict[str, str]
+
+
+def get_action_status_text(action: str) -> Optional[str]:
+    return ACTION_TO_STATUS_TEXT.get(str(action).strip().lower())
+
+
+def get_settings_item_status_text(item: str) -> Optional[str]:
+    action = SETTINGS_LABEL_TO_ACTION.get(str(item).strip().upper())
+    if not action:
+        return None
+    return get_action_status_text(action)
 
 
 class OledSettingsActionRunner:
