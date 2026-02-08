@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>dmc_nav_bridge</name>
+  <version>0.0.1</version>
+  <description>Bridge ROS2 cmd_vel to dmc_ai_mobility Zenoh motor cmd.</description>
+  <maintainer email="bot@example.com">bot-chan</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
