@@ -16,6 +16,7 @@ setup(
                 'launch/bridge_odom.launch.py',
                 'launch/nav2_slam.launch.py',
                 'launch/localization.launch.py',
+                'launch/nav2_localization.launch.py',
             ],
         ),
         (

@@ -49,3 +49,16 @@ ros2 run tf2_ros tf2_echo base_link base_scan
 Notes:
 - `/scan` must be published for costmaps/Nav2.
 - Current odom is wheel-command integration from telemetry; for production accuracy, replace with encoder/IMU fused odom (robot_localization).
+
+
+## 8) Save map after SLAM
+```bash
+/work/save_map.sh map
+```
+
+## 9) Restart in localization mode (saved map)
+```bash
+/work/start_bridge.sh
+/work/start_localization.sh
+/work/start_nav2_localization.sh
+```
