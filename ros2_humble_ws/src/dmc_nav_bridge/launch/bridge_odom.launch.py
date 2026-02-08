@@ -25,4 +25,11 @@ def generate_launch_description():
             output='screen',
             parameters=['/work/src/dmc_nav_bridge/config/lidar.yaml'],
         ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='base_to_scan_tf',
+            output='screen',
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'base_scan'],
+        ),
     ])

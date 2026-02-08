@@ -14,23 +14,27 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-## 3) Start bridge + odom
+## 3) Start bridge + odom + scan bridge
 ```bash
-ros2 launch dmc_nav_bridge bridge_odom.launch.py
+/work/start_bridge.sh
 ```
 
 ## 4) Start SLAM + Nav2 (new terminal in same container)
 ```bash
-cd /work
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch dmc_nav_bridge nav2_slam.launch.py
+/work/start_nav2_slam.sh
 ```
 
-## 5) Send goal
+## 5) Check topics/TF
 ```bash
-ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
-"{pose: {header: {frame_id: map}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}"
+ros2 topic echo /scan --once
+ros2 topic echo /odom --once
+ros2 run tf2_ros tf2_echo odom base_link
+ros2 run tf2_ros tf2_echo base_link base_scan
+```
+
+## 6) Send goal
+```bash
+/work/send_goal.sh 1.0 0.0 0
 ```
 
 Notes:
