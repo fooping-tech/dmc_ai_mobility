@@ -16,5 +16,5 @@ setup(
     maintainer_email='bot@example.com',
     description='ROS2 <-> dmc_ai_mobility bridge',
     license='Apache-2.0',
-    entry_points={'console_scripts': ['cmdvel_to_zenoh = dmc_nav_bridge.cmdvel_to_zenoh:main']},
+    entry_points={'console_scripts': ['cmdvel_to_zenoh = dmc_nav_bridge.cmdvel_to_zenoh:main','zenoh_odom_bridge = dmc_nav_bridge.zenoh_odom_bridge:main']},
 )

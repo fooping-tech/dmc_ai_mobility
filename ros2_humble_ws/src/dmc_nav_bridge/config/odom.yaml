@@ -1,0 +1,9 @@
+zenoh_odom_bridge:
+  ros__parameters:
+    robot_id: rasp-zero-01
+    zenoh_config: /work/../zenoh_remote.json5
+    wheel_base_m: 0.12
+    odom_frame: odom
+    base_frame: base_link
+    publish_tf: true
+    hz: 30.0
