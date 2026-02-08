@@ -15,6 +15,7 @@ setup(
                 'launch/bridge.launch.py',
                 'launch/bridge_odom.launch.py',
                 'launch/nav2_slam.launch.py',
+                'launch/localization.launch.py',
             ],
         ),
         (
@@ -24,6 +25,7 @@ setup(
                 'config/odom.yaml',
                 'config/lidar.yaml',
                 'config/nav2_params.yaml',
+                'config/ekf.yaml',
             ],
         ),
         ('share/' + package_name, ['README_NAV2.md']),
