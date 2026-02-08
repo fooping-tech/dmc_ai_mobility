@@ -1,4 +1,4 @@
-FROM osrf/ros:humble-desktop
+FROM arm64v8/ros:humble-ros-base
 SHELL ["/bin/bash", "-lc"]
 RUN apt-get update && apt-get install -y \
     ros-humble-navigation2 \
