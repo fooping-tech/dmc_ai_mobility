@@ -1,0 +1,11 @@
+zenoh_lidar_bridge:
+  ros__parameters:
+    robot_id: rasp-zero-01
+    zenoh_config: /work/../zenoh_remote.json5
+    scan_topic: /scan
+    scan_frame: base_scan
+    angle_min: -3.1415926535
+    angle_max: 3.1415926535
+    angle_increment: 0.0174532925
+    range_min: 0.05
+    range_max: 5.0
