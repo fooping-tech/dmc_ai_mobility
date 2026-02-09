@@ -73,6 +73,10 @@ ros2 topic echo /tf --once
 1. `bridge_odom.launch.py` が起動しているか確認
 2. `localization.launch.py` が起動しているか確認
 3. bringupを再起動
+4. EKFがNaNを出す場合は、いったんEKFなしで検証
+```bash
+/work/bringup_realrobot_slam_noekf.sh
+```
 
 ---
 

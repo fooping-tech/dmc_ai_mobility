@@ -3,8 +3,15 @@
 ## 1. 起動
 ```bash
 export ROBOT_ID=rasp-zero-01
-export ZENOH_CONFIG=/work/../zenoh_remote.json5
+export ZENOH_CONFIG=/repo/zenoh_remote.json5
 /work/bringup_realrobot_localization.sh /work/maps/map.yaml
+```
+
+### 1b. EKFで不安定なとき（NaN対策）
+```bash
+export ROBOT_ID=rasp-zero-01
+export ZENOH_CONFIG=/repo/zenoh_remote.json5
+/work/bringup_realrobot_slam_noekf.sh
 ```
 
 ## 2. Preflight

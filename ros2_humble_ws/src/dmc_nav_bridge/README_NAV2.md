@@ -69,6 +69,11 @@ SLAM mode:
 /work/bringup_realrobot_slam.sh
 ```
 
+SLAM mode (EKFなし / troubleshooting fallback):
+```bash
+/work/bringup_realrobot_slam_noekf.sh
+```
+
 Localization mode (map path optional):
 ```bash
 /work/bringup_realrobot_localization.sh /work/maps/map.yaml
