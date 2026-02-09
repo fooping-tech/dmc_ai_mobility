@@ -14,6 +14,7 @@ def generate_launch_description():
                 'use_sim_time': 'False',
                 'map': '/work/maps/map.yaml',
                 'params_file': '/work/src/dmc_nav_bridge/config/nav2_params.yaml',
+                'autostart': 'True',
             }.items(),
         )
     ])

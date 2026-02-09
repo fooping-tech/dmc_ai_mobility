@@ -19,6 +19,7 @@ def generate_launch_description():
             'slam': 'True',
             'use_sim_time': 'False',
             'params_file': '/work/src/dmc_nav_bridge/config/nav2_params.yaml',
+            'autostart': 'True',
         }.items(),
     )
 
