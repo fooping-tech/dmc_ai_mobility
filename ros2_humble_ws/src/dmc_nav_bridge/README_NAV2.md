@@ -99,3 +99,18 @@ Logs:
 ## 12) Operations docs
 - Troubleshooting runbook: `/work/RUNBOOK_REALROBOT_NAV2.md`
 - Test-day quick checklist: `/work/TESTDAY_CHECKLIST_10MIN.md`
+
+## 13) Offline parameter benchmark (without real robot)
+Run planner/costmap parameter comparison on custom map:
+```bash
+/work/benchmark_nav2_params.sh
+```
+
+Outputs:
+- `/work/nav2_param_benchmark.csv`
+- `/work/nav2_param_benchmark.md`
+
+Main compared knobs:
+- `planner_server.GridBased.use_astar`
+- `planner_server.GridBased.tolerance`
+- `global/local_costmap.inflation_layer.inflation_radius`
