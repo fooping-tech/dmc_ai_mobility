@@ -7,8 +7,10 @@ LOG_DIR=${LOG_DIR:-/tmp/dmc_nav2_realrobot_noekf}
 mkdir -p "$LOG_DIR"
 
 cd /work
+set +u
 source /opt/ros/humble/setup.bash
 source /work/install/setup.bash
+set -u
 
 cleanup() {
   echo "[bringup-noekf] stopping launched processes..."
