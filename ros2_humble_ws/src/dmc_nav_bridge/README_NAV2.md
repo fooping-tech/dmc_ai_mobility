@@ -95,3 +95,7 @@ Checks:
 Logs:
 - SLAM: `/tmp/dmc_nav2_realrobot`
 - Localization: `/tmp/dmc_nav2_realrobot_loc`
+
+## 12) Operations docs
+- Troubleshooting runbook: `/work/RUNBOOK_REALROBOT_NAV2.md`
+- Test-day quick checklist: `/work/TESTDAY_CHECKLIST_10MIN.md`
