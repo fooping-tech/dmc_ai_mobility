@@ -74,11 +74,23 @@ Localization mode (map path optional):
 /work/bringup_realrobot_localization.sh /work/maps/map.yaml
 ```
 
-Both scripts launch bridge + EKF + Nav2 stack and run quick health checks for:
+Optional env vars:
+```bash
+export ROBOT_ID=rasp-zero-01
+export ZENOH_CONFIG=/work/../zenoh_remote.json5
+```
+
+## 11) Preflight check (before sending goals)
+```bash
+/work/preflight_check.sh
+```
+
+Checks:
 - `/scan`
-- `/odom` / `/odom_filtered`
-- TF links
-- `/navigate_to_pose`
+- `/odom` and `/odom_filtered`
+- `odom -> base_link`
+- `base_link -> base_scan`
+- `/navigate_to_pose` action availability
 
 Logs:
 - SLAM: `/tmp/dmc_nav2_realrobot`

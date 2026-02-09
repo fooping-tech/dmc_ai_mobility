@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROBOT_ID=${ROBOT_ID:-rasp-zero-01}
+ZENOH_CONFIG=${ZENOH_CONFIG:-/work/../zenoh_remote.json5}
 LOG_DIR=${LOG_DIR:-/tmp/dmc_nav2_realrobot}
 mkdir -p "$LOG_DIR"
 
@@ -15,7 +17,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Bridge nodes (cmd_vel<->zenoh, odom bridge, lidar bridge, base_link->base_scan TF)
-ros2 launch dmc_nav_bridge bridge_odom.launch.py >"$LOG_DIR/bridge.log" 2>&1 &
+ros2 launch dmc_nav_bridge bridge_odom.launch.py \
+  robot_id:="$ROBOT_ID" zenoh_config:="$ZENOH_CONFIG" >"$LOG_DIR/bridge.log" 2>&1 &
 B_PID=$!
 echo "[bringup] bridge pid=$B_PID"
 
@@ -29,6 +32,7 @@ ros2 launch dmc_nav_bridge nav2_slam.launch.py >"$LOG_DIR/nav2_slam.log" 2>&1 &
 N_PID=$!
 echo "[bringup] nav2_slam pid=$N_PID"
 
+echo "[bringup] robot_id=$ROBOT_ID zenoh_config=$ZENOH_CONFIG"
 echo "[bringup] waiting for topics/actions..."
 sleep 10
 
