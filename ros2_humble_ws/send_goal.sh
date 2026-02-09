@@ -20,6 +20,8 @@ print(x,y,math.sin(yaw/2.0),math.cos(yaw/2.0))
 PY
 )
 cd /work
+set +u
 source /opt/ros/humble/setup.bash
 source /work/install/setup.bash
+set -u
 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: map}, pose: {position: {x: $X2, y: $Y2, z: 0.0}, orientation: {z: $Z, w: $W}}}}"
