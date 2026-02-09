@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-robot-localization \
     ros-humble-twist-mux \
     ros-humble-teleop-twist-keyboard \
+    ros-humble-rviz2 \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
