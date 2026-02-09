@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-twist-mux \
     ros-humble-teleop-twist-keyboard \
     ros-humble-rviz2 \
+    ros-humble-turtlebot3-description \
     python3-pip \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
