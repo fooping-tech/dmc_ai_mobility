@@ -62,3 +62,24 @@ Notes:
 /work/start_localization.sh
 /work/start_nav2_localization.sh
 ```
+
+## 10) One-command bringup for real robot (recommended)
+SLAM mode:
+```bash
+/work/bringup_realrobot_slam.sh
+```
+
+Localization mode (map path optional):
+```bash
+/work/bringup_realrobot_localization.sh /work/maps/map.yaml
+```
+
+Both scripts launch bridge + EKF + Nav2 stack and run quick health checks for:
+- `/scan`
+- `/odom` / `/odom_filtered`
+- TF links
+- `/navigate_to_pose`
+
+Logs:
+- SLAM: `/tmp/dmc_nav2_realrobot`
+- Localization: `/tmp/dmc_nav2_realrobot_loc`
