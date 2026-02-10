@@ -18,6 +18,8 @@ def generate_launch_description():
         launch_arguments={
             'slam': 'True',
             'use_sim_time': 'False',
+            # bringup_launch in this environment requires map arg even in SLAM mode
+            'map': '/work/maps/map.yaml',
             'params_file': '/work/src/dmc_nav_bridge/config/nav2_params.yaml',
             'autostart': 'True',
         }.items(),

@@ -52,3 +52,14 @@ motor_config.json
 
 # Local zenoh config (environment-specific)
 zenoh_remote.json5
+
+# Experimental / generated Nav2 validation assets
+experiments/
+nav2_custom_map/
+ros2_humble_ws/nav2_param_benchmark.*
+ros2_humble_ws/core
+ros2_humble_ws/maps/
+
+# Vendored external sources (local-only)
+ros2_humble_ws/src/turtlebot3/
+ros2_humble_ws/src/turtlebot3_simulations/
