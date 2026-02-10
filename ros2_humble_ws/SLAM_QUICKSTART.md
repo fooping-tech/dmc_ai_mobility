@@ -3,13 +3,24 @@
 このページは「実機でSLAMを開始して、地図保存まで行う」ための最短手順です。
 
 前提:
-- コンテナは `run_nav2_container.sh` で起動済み
-- コンテナ内で `/work` が見えている
+- `ros2_humble_ws` と `/repo` がマウントされたコンテナを使用する
 - `ROBOT_ID`, `ZENOH_CONFIG` が正しい
 
 ---
 
-## 0) 環境読み込み
+## 0) コンテナ起動（ホスト側）
+```bash
+cd /home/fukuhala/python_ws/dmc_ai_mobility/ros2_humble_ws
+./run_nav2_container.sh
+```
+
+補足:
+- `run_nav2_container.sh` は `/repo` と `/work` を自動マウントします
+- 参考: `/work/src/dmc_nav_bridge/README_NAV2.md`
+
+---
+
+## 1) 環境読み込み（コンテナ内）
 ```bash
 cd /work
 set +u
@@ -23,7 +34,7 @@ export ZENOH_CONFIG=/repo/zenoh_remote.json5
 
 ---
 
-## 1) SLAM起動（推奨: no-EKF）
+## 2) SLAM起動（推奨: no-EKF）
 まずは安定性優先で no-EKF 版。
 
 ```bash
@@ -37,7 +48,7 @@ EKF版を使う場合:
 
 ---
 
-## 2) 別ターミナルで健全性チェック
+## 3) 別ターミナルで健全性チェック
 ```bash
 docker exec -it $(docker ps --filter ancestor=dmc-ros2-humble-nav2 -q | head -n1) bash
 cd /work
@@ -58,7 +69,7 @@ ros2 action list | grep navigate_to_pose
 
 ---
 
-## 3) RVizで確認
+## 4) RVizで確認
 ```bash
 rviz2
 ```
@@ -71,13 +82,13 @@ rviz2
 
 ---
 
-## 4) 地図作成
+## 5) 地図作成
 - 手動でロボットをゆっくり動かして探索
 - 未探索領域を減らす
 
 ---
 
-## 5) 地図保存
+## 6) 地図保存
 ```bash
 /work/save_map.sh map
 ```
@@ -88,14 +99,14 @@ rviz2
 
 ---
 
-## 6) Localizationモードで再起動（保存地図使用）
+## 7) Localizationモードで再起動（保存地図使用）
 ```bash
 /work/bringup_realrobot_localization.sh /work/maps/map.yaml
 ```
 
 ---
 
-## 7) Goal送信テスト
+## 8) Goal送信テスト
 ```bash
 /work/send_goal.sh 0.3 0.0 0.0
 ```
