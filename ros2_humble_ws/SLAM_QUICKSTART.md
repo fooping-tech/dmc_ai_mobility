@@ -72,15 +72,19 @@ ros2 action list | grep navigate_to_pose
 ---
 
 ## 4) RVizで確認
+毎回の手設定を避けるため、事前設定済みプロファイルを使います。
+
 ```bash
-rviz2
+/work/start_rviz_localization.sh
 ```
 
-推奨表示:
+読み込まれる設定:
+- `/work/config/rviz/localization.rviz`
 - Fixed Frame: `map`
-- `Map`
+- `Map` (`/map`, Reliable + Transient Local)
 - `TF`
 - `LaserScan`（topic: `/scan`）
+- `AMCL Pose`（topic: `/amcl_pose`）
 
 ---
 
