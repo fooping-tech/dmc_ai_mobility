@@ -8,8 +8,10 @@ LOG_DIR=${LOG_DIR:-/tmp/dmc_nav2_realrobot_loc}
 mkdir -p "$LOG_DIR"
 
 cd /work
+set +u
 source /opt/ros/humble/setup.bash
 source /work/install/setup.bash
+set -u
 
 cleanup() {
   echo "[bringup-loc] stopping launched processes..."
