@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>web_nav2_ui</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    #map { border: 1px solid #888; image-rendering: pixelated; }
+    .row { margin: 8px 0; }
+    #status { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h3>Nav2 Web UI (MVP)</h3>
+  <div class="row">Status: <span id="status">idle</span></div>
+  <div class="row">
+    Goal yaw(deg): <input id="yaw" type="number" value="0" />
+    <button id="reload">Reload Map</button>
+  </div>
+  <canvas id="map" width="600" height="600"></canvas>
+  <p>地図をクリックするとその座標へ goal を送信します。</p>
+
+<script>
+let mapData = null;
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+
+async function fetchMap() {
+  const r = await fetch('/api/map');
+  if (!r.ok) throw new Error('map not ready');
+  mapData = await r.json();
+  drawMap();
+}
+
+function drawMap() {
+  if (!mapData) return;
+  const {width, height, data} = mapData;
+  const img = ctx.createImageData(width, height);
+  for (let i=0; i<data.length; i++) {
+    const v = data[i];
+    let c = 200;
+    if (v < 0) c = 120;
+    else if (v > 50) c = 0;
+    const idx = i * 4;
+    img.data[idx] = c;
+    img.data[idx+1] = c;
+    img.data[idx+2] = c;
+    img.data[idx+3] = 255;
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+function canvasToMap(cx, cy) {
+  const {width, height, resolution, origin} = mapData;
+  const mx = cx / canvas.width * width;
+  const my = (canvas.height - cy) / canvas.height * height;
+  return {
+    x: origin.x + mx * resolution,
+    y: origin.y + my * resolution,
+  }
+}
+
+async function sendGoal(x, y, yaw_deg) {
+  const r = await fetch('/api/goal', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({x, y, yaw_deg})
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t);
+  }
+}
+
+canvas.addEventListener('click', async (ev) => {
+  if (!mapData) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = ev.clientX - rect.left;
+  const cy = ev.clientY - rect.top;
+  const p = canvasToMap(cx, cy);
+  const yaw = Number(document.getElementById('yaw').value || 0);
+  try {
+    await sendGoal(p.x, p.y, yaw);
+    document.getElementById('status').textContent = `goal sent (${p.x.toFixed(2)}, ${p.y.toFixed(2)})`;
+  } catch (e) {
+    document.getElementById('status').textContent = `send failed: ${e.message}`;
+  }
+});
+
+document.getElementById('reload').onclick = fetchMap;
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/goal/status');
+    const s = await r.json();
+    document.getElementById('status').textContent = `${s.status} ${s.detail || ''}`;
+  } catch {}
+}
+
+fetchMap().catch(e => {
+  document.getElementById('status').textContent = `map wait: ${e.message}`;
+});
+setInterval(pollStatus, 1000);
+</script>
+</body>
+</html>
