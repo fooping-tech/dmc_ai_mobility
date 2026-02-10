@@ -17,6 +17,11 @@ build/
 dist/
 *.egg-info/
 
+# ROS2 workspace build artifacts
+ros2_humble_ws/build/
+ros2_humble_ws/install/
+ros2_humble_ws/log/
+
 # OS/editor files
 .DS_Store
 .idea/
