@@ -10,11 +10,13 @@
 
 ## 0) コンテナ起動（ホスト側）
 ```bash
+xhost +SI:localuser:root
 cd /home/fukuhala/python_ws/dmc_ai_mobility/ros2_humble_ws
 ./run_nav2_container.sh
 ```
 
 補足:
+- `xhost +SI:localuser:root` はコンテナ内 root で RViz 表示するために必要
 - `run_nav2_container.sh` は `/repo` と `/work` を自動マウントします
 - 参考: `/work/src/dmc_nav_bridge/README_NAV2.md`
 
