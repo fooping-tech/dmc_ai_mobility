@@ -106,7 +106,16 @@ Logs:
 - Troubleshooting runbook: `/work/RUNBOOK_REALROBOT_NAV2.md`
 - Test-day quick checklist: `/work/TESTDAY_CHECKLIST_10MIN.md`
 
-## 13) Offline parameter benchmark (without real robot)
+## 13) SLAM frame/topic defaults
+`nav2_slam.launch.py` now loads `/work/src/dmc_nav_bridge/config/slam_toolbox.yaml` with explicit:
+- `odom_frame: odom`
+- `map_frame: map`
+- `base_frame: base_link`
+- `scan_topic: /scan`
+
+This avoids `Failed to compute odom pose` caused by frame/topic mismatch.
+
+## 14) Offline parameter benchmark (without real robot)
 Run planner/costmap parameter comparison on custom map:
 ```bash
 /work/benchmark_nav2_params.sh

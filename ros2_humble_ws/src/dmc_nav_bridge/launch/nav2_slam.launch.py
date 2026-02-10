@@ -10,7 +10,10 @@ def generate_launch_description():
 
     slam = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([slam_dir, '/launch/online_async_launch.py']),
-        launch_arguments={'use_sim_time': 'false'}.items(),
+        launch_arguments={
+            'use_sim_time': 'false',
+            'slam_params_file': '/work/src/dmc_nav_bridge/config/slam_toolbox.yaml',
+        }.items(),
     )
 
     nav2 = IncludeLaunchDescription(
