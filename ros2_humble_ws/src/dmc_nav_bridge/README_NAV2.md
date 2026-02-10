@@ -102,6 +102,7 @@ Logs:
 - Localization: `/tmp/dmc_nav2_realrobot_loc`
 
 ## 12) Operations docs
+- SLAM quickstart: `/work/SLAM_QUICKSTART.md`
 - Troubleshooting runbook: `/work/RUNBOOK_REALROBOT_NAV2.md`
 - Test-day quick checklist: `/work/TESTDAY_CHECKLIST_10MIN.md`
 
