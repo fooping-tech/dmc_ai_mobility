@@ -37,9 +37,9 @@ dist/
 *.webm
 exit_scan_*/
 door_approach_*/
-nav2_casepack/frames_*/
-nav2_casepack/videos/
-nav2_casepack/images/
+experiments/nav2_casepack/frames_*/
+experiments/nav2_casepack/videos/
+experiments/nav2_casepack/images/
 
 # Calibration outputs (often generated in repo root)
 imu_config.json
