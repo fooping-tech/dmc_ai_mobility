@@ -17,14 +17,25 @@
   <div class="row">
     Goal yaw(deg): <input id="yaw" type="number" value="0" />
     <button id="reload">Reload Map</button>
+    <button id="modeSingle">Single Goal</button>
+    <button id="modeWp">Waypoint Add</button>
   </div>
   <canvas id="map" width="600" height="600"></canvas>
-  <p>地図をクリックするとその座標へ goal を送信します。</p>
+  <p>Single Goal: クリックで即送信 / Waypoint Add: クリックで蓄積</p>
+
+  <div class="row">
+    <button id="runWp">Run Waypoints</button>
+    <button id="clearWp">Clear Waypoints</button>
+  </div>
+  <pre id="wpList" style="background:#f3f3f3;padding:8px;max-width:600px;white-space:pre-wrap"></pre>
 
 <script>
 let mapData = null;
+let mode = 'single';
+let waypoints = [];
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
+const wpListEl = document.getElementById('wpList');
 
 async function fetchMap() {
   const r = await fetch('/api/map');
@@ -80,6 +91,26 @@ async function sendGoal(x, y, yaw_deg) {
   }
 }
 
+async function runWaypoints() {
+  const r = await fetch('/api/waypoints/run', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({waypoints})
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t);
+  }
+}
+
+function renderWaypoints() {
+  if (waypoints.length === 0) {
+    wpListEl.textContent = 'waypoints: (empty)';
+    return;
+  }
+  wpListEl.textContent = waypoints.map((p, i) => `${i+1}. x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}, yaw=${p.yaw_deg.toFixed(1)}deg`).join('\n');
+}
+
 canvas.addEventListener('click', async (ev) => {
   if (!mapData) return;
   const rect = canvas.getBoundingClientRect();
@@ -87,6 +118,14 @@ canvas.addEventListener('click', async (ev) => {
   const cy = ev.clientY - rect.top;
   const p = canvasToMap(cx, cy);
   const yaw = Number(document.getElementById('yaw').value || 0);
+
+  if (mode === 'wp') {
+    waypoints.push({x: p.x, y: p.y, yaw_deg: yaw});
+    renderWaypoints();
+    document.getElementById('status').textContent = `wp added (${p.x.toFixed(2)}, ${p.y.toFixed(2)})`;
+    return;
+  }
+
   try {
     await sendGoal(p.x, p.y, yaw);
     document.getElementById('status').textContent = `goal sent (${p.x.toFixed(2)}, ${p.y.toFixed(2)})`;
@@ -96,6 +135,30 @@ canvas.addEventListener('click', async (ev) => {
 });
 
 document.getElementById('reload').onclick = fetchMap;
+document.getElementById('modeSingle').onclick = () => {
+  mode = 'single';
+  document.getElementById('status').textContent = 'mode: single goal';
+};
+document.getElementById('modeWp').onclick = () => {
+  mode = 'wp';
+  document.getElementById('status').textContent = 'mode: waypoint add';
+};
+document.getElementById('clearWp').onclick = () => {
+  waypoints = [];
+  renderWaypoints();
+};
+document.getElementById('runWp').onclick = async () => {
+  if (waypoints.length === 0) {
+    document.getElementById('status').textContent = 'no waypoints';
+    return;
+  }
+  try {
+    await runWaypoints();
+    document.getElementById('status').textContent = `waypoint run started (${waypoints.length})`;
+  } catch (e) {
+    document.getElementById('status').textContent = `run failed: ${e.message}`;
+  }
+};
 
 async function pollStatus() {
   try {
@@ -105,6 +168,7 @@ async function pollStatus() {
   } catch {}
 }
 
+renderWaypoints();
 fetchMap().catch(e => {
   document.getElementById('status').textContent = `map wait: ${e.message}`;
 });
