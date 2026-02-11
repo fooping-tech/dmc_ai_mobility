@@ -9,10 +9,17 @@
 ---
 
 ## 0) コンテナ起動（ホスト側）
+通常（新規起動）:
 ```bash
 xhost +SI:localuser:root
 cd /home/fukuhala/python_ws/dmc_ai_mobility/ros2_humble_ws
 ./run_nav2_container.sh
+```
+
+すでにコンテナが起動済みの場合（入り直し）:
+```bash
+xhost +SI:localuser:root
+docker exec -it $(docker ps --filter ancestor=dmc-ros2-humble-nav2 -q | head -n1) bash
 ```
 
 補足:
