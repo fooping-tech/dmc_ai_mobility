@@ -43,7 +43,7 @@ export ZENOH_CONFIG=/repo/zenoh_remote.json5
 
 ---
 
-※ 現在のSLAM解像度は `0.03m/cell`（3cm）設定です。Raspberry Piでは負荷が上がるため、重い場合は `src/dmc_nav_bridge/config/slam_toolbox.yaml` の `resolution` を見直してください。
+※ 現在のSLAM解像度は `0.05m/cell`（5cm）設定です。Raspberry Piでは負荷が上がるため、重い場合は `src/dmc_nav_bridge/config/slam_toolbox.yaml` の `resolution` を見直してください。
 
 ## 2) SLAM起動（推奨: no-EKF）
 まずは安定性優先で no-EKF 版。
