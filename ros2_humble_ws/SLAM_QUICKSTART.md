@@ -43,7 +43,7 @@ export ZENOH_CONFIG=/repo/zenoh_remote.json5
 
 ---
 
-※ 現在のSLAM解像度は `0.05m/cell`（5cm）設定です。Raspberry Piでは負荷が上がるため、重い場合は `src/dmc_nav_bridge/config/slam_toolbox.yaml` の `resolution` を見直してください。
+※ 現在のSLAM解像度は `0.01m/cell`（1cm）設定です。Raspberry Piでは負荷が上がるため、重い場合は `src/dmc_nav_bridge/config/slam_toolbox.yaml` の `resolution` を見直してください。
 
 ## 2) SLAM起動（推奨: no-EKF）
 まずは安定性優先で no-EKF 版。
@@ -131,3 +131,8 @@ ros2 action list | grep navigate_to_pose
 ## トラブル時
 - `/work/RUNBOOK_REALROBOT_NAV2.md`
 - EKFでNaNが出る場合は no-EKF で先に動作確認する
+- 地図がチラつく/二重に見える場合は重複起動を確認する:
+  ```bash
+  ros2 node list | egrep "slam_toolbox|zenoh_odom_bridge|zenoh_lidar_bridge"
+  ```
+  それぞれ1つだけであること。複数ある場合はいったんコンテナを再起動して、起動スクリプトを1回だけ実行する。
