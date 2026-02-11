@@ -115,7 +115,23 @@ Logs:
 
 This avoids `Failed to compute odom pose` caused by frame/topic mismatch.
 
-## 14) Offline parameter benchmark (without real robot)
+## 14) Waypoint navigation (arbitrary points)
+Use `/work/waypoint_navi.py` to send sequential waypoints.
+
+Quick example:
+```bash
+python /work/waypoint_navi.py \
+  --waypoints "-0.5,2.6,0.0;-0.2,2.2,-1.57;0.0,2.0,3.14"
+```
+
+File-driven example:
+```bash
+python /work/waypoint_navi.py --file /work/waypoints.sample.json --set-initial-pose
+```
+
+See: `/work/WAYPOINT_NAVI.md`
+
+## 15) Offline parameter benchmark (without real robot)
 Run planner/costmap parameter comparison on custom map:
 ```bash
 /work/benchmark_nav2_params.sh
