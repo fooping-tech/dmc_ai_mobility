@@ -52,12 +52,20 @@ def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> Mo
     # - apply trim and invert right channel as in calibration script conventions
 
     # Ensure each wheel overcomes stiction if commanded non-zero.
-    v_start = float(getattr(cfg, "v_start", 0.0) or 0.0)
-    if v_start > 0:
-        if 0.0 < abs(v_l) < v_start:
-            v_l = (1.0 if v_l >= 0 else -1.0) * v_start
-        if 0.0 < abs(v_r) < v_start:
-            v_r = (1.0 if v_r >= 0 else -1.0) * v_start
+    default_v_start = float(getattr(cfg, "v_start", 0.0) or 0.0)
+    v_start_fwd = float(getattr(cfg, "v_start_forward", default_v_start) or default_v_start)
+    v_start_rev = float(getattr(cfg, "v_start_reverse", default_v_start) or default_v_start)
+
+    def _apply_v_start(v: float) -> float:
+        if abs(v) <= 0.0:
+            return v
+        thr = v_start_fwd if v >= 0.0 else v_start_rev
+        if thr > 0.0 and abs(v) < thr:
+            return (1.0 if v >= 0.0 else -1.0) * thr
+        return v
+
+    v_l = _apply_v_start(v_l)
+    v_r = _apply_v_start(v_r)
 
     # Determine trim value based on speed magnitude and direction.
     trim = float(cfg.trim or 0.0)
@@ -154,6 +162,8 @@ class PigpioMotorConfig:
     trim_points_reverse: Optional[list[tuple[float, float]]] = None
     # Optional minimum commanded speed magnitude to overcome stiction/deadband.
     v_start: float = 0.0
+    v_start_forward: Optional[float] = None
+    v_start_reverse: Optional[float] = None
 
     neutral_pw: int = 1500
     gain_pw_per_unit: float = 500.0

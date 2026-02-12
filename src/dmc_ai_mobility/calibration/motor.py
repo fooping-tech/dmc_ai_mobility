@@ -6,27 +6,19 @@ Requested upgrade:
 Buttons (SW1/SW2):
 - SW1 short: + (adjust value)
 - SW2 short: - (adjust value)
-- BOTH short: cycle mode (START_V -> LOW_TRIM -> MID_TRIM -> HIGH_TRIM)
+- BOTH short: cycle mode
+  FWD_START_V -> FWD_LOW_TRIM -> FWD_MID_TRIM -> FWD_HIGH_TRIM
+  -> REV_START_V -> REV_LOW_TRIM -> REV_MID_TRIM -> REV_HIGH_TRIM
 - BOTH long (>=1.2s): save & exit
 
 Saved file (configs/motor_config.json):
 {
   "v_start": 0.10,
-  "trim_points": [
-    {"label":"low",  "v":0.15, "trim":0.00},
-    {"label":"mid",  "v":0.30, "trim":0.00},
-    {"label":"high", "v":0.50, "trim":0.00}
-  ],
-  "trim_points_forward": [
-    {"label":"low",  "v":0.15, "trim":0.00},
-    {"label":"mid",  "v":0.30, "trim":0.00},
-    {"label":"high", "v":0.50, "trim":0.00}
-  ],
-  "trim_points_reverse": [
-    {"label":"low",  "v":0.15, "trim":0.00},
-    {"label":"mid",  "v":0.30, "trim":0.00},
-    {"label":"high", "v":0.50, "trim":0.00}
-  ]
+  "trim_points": [...],
+  "v_start_forward": 0.10,
+  "v_start_reverse": 0.10,
+  "trim_points_forward": [...],
+  "trim_points_reverse": [...]
 }
 
 Note
@@ -39,6 +31,7 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import pigpio
 
@@ -54,27 +47,44 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "config.toml"
 SAVE_PATH = REPO_ROOT / "configs" / "motor_config.json"
 DEFAULT_GPIO = {"pin_l": 19, "pin_r": 12, "sw1": 8, "sw2": 7}
+DEFAULT_OLED = {"i2c_port": 1, "i2c_address": 0x3C, "width": 128, "height": 32}
+
+
+def _load_toml(path: Path) -> dict:
+    if tomllib is None:
+        return {}
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
 
 
 def load_gpio(path: Path) -> dict:
-    if tomllib is None:
-        print("tomllib not available, using default GPIO config.")
+    data = _load_toml(path)
+    if not data:
+        print(f"Config not found or unreadable: {path}, using GPIO defaults.")
         return DEFAULT_GPIO.copy()
-    try:
-        with path.open("rb") as f:
-            data = tomllib.load(f)
-        gpio = data.get("gpio", {})
-        return {
-            "pin_l": int(gpio.get("pin_l", DEFAULT_GPIO["pin_l"])),
-            "pin_r": int(gpio.get("pin_r", DEFAULT_GPIO["pin_r"])),
-            "sw1": int(gpio.get("sw1", DEFAULT_GPIO["sw1"])),
-            "sw2": int(gpio.get("sw2", DEFAULT_GPIO["sw2"])),
-        }
-    except FileNotFoundError:
-        print(f"Config not found: {path}, using defaults.")
-    except Exception as e:
-        print(f"Failed to load GPIO config: {e}, using defaults.")
-    return DEFAULT_GPIO.copy()
+    gpio = data.get("gpio", {})
+    return {
+        "pin_l": int(gpio.get("pin_l", DEFAULT_GPIO["pin_l"])),
+        "pin_r": int(gpio.get("pin_r", DEFAULT_GPIO["pin_r"])),
+        "sw1": int(gpio.get("sw1", DEFAULT_GPIO["sw1"])),
+        "sw2": int(gpio.get("sw2", DEFAULT_GPIO["sw2"])),
+    }
+
+
+def load_oled(path: Path) -> dict:
+    data = _load_toml(path)
+    if not data:
+        return DEFAULT_OLED.copy()
+    o = data.get("oled", {})
+    return {
+        "i2c_port": int(o.get("i2c_port", DEFAULT_OLED["i2c_port"])),
+        "i2c_address": int(o.get("i2c_address", DEFAULT_OLED["i2c_address"])),
+        "width": int(o.get("width", DEFAULT_OLED["width"])),
+        "height": int(o.get("height", DEFAULT_OLED["height"])),
+    }
 
 
 gpio = load_gpio(CONFIG_PATH)
@@ -82,6 +92,8 @@ PIN_L = gpio["pin_l"]
 PIN_R = gpio["pin_r"]
 SW1 = gpio["sw1"]
 SW2 = gpio["sw2"]
+
+oled_cfg = load_oled(CONFIG_PATH)
 
 # Motor mapping in m/s units (must match drivers/motor.py defaults)
 NEUTRAL_PW = 1500
@@ -104,17 +116,30 @@ def drive(pi: pigpio.pi, v_mps: float, trim: float) -> None:
 
 @dataclass
 class CalState:
-    mode: str = "START_V"
-    v_start: float = 0.10
+    mode_idx: int = 0
     v_low: float = 0.15
     v_mid: float = 0.30
     v_high: float = 0.50
-    trim_low: float = 0.00
-    trim_mid: float = 0.00
-    trim_high: float = 0.00
+    v_start_fwd: float = 0.10
+    v_start_rev: float = 0.10
+    trim_low_fwd: float = 0.00
+    trim_mid_fwd: float = 0.00
+    trim_high_fwd: float = 0.00
+    trim_low_rev: float = 0.00
+    trim_mid_rev: float = 0.00
+    trim_high_rev: float = 0.00
 
 
-MODES = ["START_V", "LOW_TRIM", "MID_TRIM", "HIGH_TRIM"]
+MODES = [
+    ("FWD", "START_V"),
+    ("FWD", "LOW_TRIM"),
+    ("FWD", "MID_TRIM"),
+    ("FWD", "HIGH_TRIM"),
+    ("REV", "START_V"),
+    ("REV", "LOW_TRIM"),
+    ("REV", "MID_TRIM"),
+    ("REV", "HIGH_TRIM"),
+]
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
@@ -131,19 +156,101 @@ def main() -> int:
         pi.set_mode(sw, pigpio.INPUT)
         pi.set_pull_up_down(sw, pigpio.PUD_UP)
 
-    def print_status() -> None:
-        print(
-            f"MODE={st.mode} | v_start={st.v_start:.2f} | "
-            f"low(v={st.v_low:.2f},trim={st.trim_low:+.3f}) "
-            f"mid(v={st.v_mid:.2f},trim={st.trim_mid:+.3f}) "
-            f"high(v={st.v_high:.2f},trim={st.trim_high:+.3f})",
-            flush=True,
-        )
+    oled = None
+    try:
+        from dmc_ai_mobility.drivers.oled import Ssd1306OledConfig, Ssd1306OledDriver
 
-    print("=== Motor Straight Calibration (4 points) ===")
+        oled = Ssd1306OledDriver(
+            Ssd1306OledConfig(
+                i2c_port=oled_cfg["i2c_port"],
+                i2c_address=oled_cfg["i2c_address"],
+                width=oled_cfg["width"],
+                height=oled_cfg["height"],
+            )
+        )
+    except Exception as e:
+        print(f"OLED unavailable in calibration mode: {e}")
+
+    def current_mode() -> tuple[str, str]:
+        return MODES[st.mode_idx]
+
+    def _get_trim(direction: str, level: str) -> float:
+        if direction == "FWD":
+            if level == "LOW_TRIM":
+                return st.trim_low_fwd
+            if level == "MID_TRIM":
+                return st.trim_mid_fwd
+            return st.trim_high_fwd
+        if level == "LOW_TRIM":
+            return st.trim_low_rev
+        if level == "MID_TRIM":
+            return st.trim_mid_rev
+        return st.trim_high_rev
+
+    def _set_trim(direction: str, level: str, value: float) -> None:
+        value = clamp(value, -0.80, 0.80)
+        if direction == "FWD":
+            if level == "LOW_TRIM":
+                st.trim_low_fwd = value
+            elif level == "MID_TRIM":
+                st.trim_mid_fwd = value
+            else:
+                st.trim_high_fwd = value
+        else:
+            if level == "LOW_TRIM":
+                st.trim_low_rev = value
+            elif level == "MID_TRIM":
+                st.trim_mid_rev = value
+            else:
+                st.trim_high_rev = value
+
+    def _get_v_start(direction: str) -> float:
+        return st.v_start_fwd if direction == "FWD" else st.v_start_rev
+
+    def _set_v_start(direction: str, value: float) -> None:
+        value = clamp(value, 0.02, 1.00)
+        if direction == "FWD":
+            st.v_start_fwd = value
+        else:
+            st.v_start_rev = value
+
+    def print_status() -> None:
+        d, m = current_mode()
+        if m == "START_V":
+            val = f"v_start={_get_v_start(d):.2f}"
+        else:
+            val = f"trim={_get_trim(d, m):+.3f}"
+        text = (
+            f"MODE={d}_{m} | {val} | "
+            f"fwd_start={st.v_start_fwd:.2f} rev_start={st.v_start_rev:.2f} | "
+            f"fwd(low/mid/high)={st.trim_low_fwd:+.3f}/{st.trim_mid_fwd:+.3f}/{st.trim_high_fwd:+.3f} | "
+            f"rev(low/mid/high)={st.trim_low_rev:+.3f}/{st.trim_mid_rev:+.3f}/{st.trim_high_rev:+.3f}"
+        )
+        print(text, flush=True)
+
+    def update_oled(emphasis: Optional[str] = None) -> None:
+        if oled is None:
+            return
+        d, m = current_mode()
+        line1 = f"CAL {d} {m}"
+        if m == "START_V":
+            line2 = f"v_start {_get_v_start(d):.2f}"
+        else:
+            line2 = f"trim {_get_trim(d, m):+.3f}"
+        line3 = f"SW1+ SW2- BOTH>"
+        text = f"{line1}\n{line2}\n{line3}"
+        if emphasis:
+            text = f"{emphasis}\n{line2}\n{line3}"
+        try:
+            oled.show_text(text)
+        except Exception:
+            pass
+
+    print("=== Motor Straight Calibration (dir split) ===")
     print("SW1 short: + | SW2 short: -")
     print("BOTH short: cycle mode | BOTH long: save & exit")
     print_status()
+    update_oled()
 
     both_press_start: int | None = None
     last_both_cycle_ms = 0
@@ -163,72 +270,82 @@ def main() -> int:
                     both_press_start = now_ms
                 elif now_ms - both_press_start >= 1200:
                     print("Saving...", flush=True)
+                    if oled is not None:
+                        try:
+                            oled.show_text("CAL\nSAVED")
+                        except Exception:
+                            pass
                     break
             else:
                 both_press_start = None
 
             # BOTH short press => cycle mode (rate-limited)
             if both and (now_ms - last_both_cycle_ms) > 1500:
-                # cycle once per press
                 last_both_cycle_ms = now_ms
-                st.mode = MODES[(MODES.index(st.mode) + 1) % len(MODES)]
+                st.mode_idx = (st.mode_idx + 1) % len(MODES)
+                d, m = current_mode()
                 print_status()
+                update_oled(emphasis=f"{d} {m}")
                 time.sleep(0.25)
                 continue
 
+            d, m = current_mode()
+
             # Per-mode adjustments
             if s1 == 0 and s2 == 1:
-                # SW1 short: +
-                if st.mode == "START_V":
-                    st.v_start = clamp(st.v_start + 0.01, 0.02, 1.00)
-                elif st.mode == "LOW_TRIM":
-                    st.trim_low = clamp(st.trim_low + 0.01, -0.80, 0.80)
-                elif st.mode == "MID_TRIM":
-                    st.trim_mid = clamp(st.trim_mid + 0.01, -0.80, 0.80)
-                elif st.mode == "HIGH_TRIM":
-                    st.trim_high = clamp(st.trim_high + 0.01, -0.80, 0.80)
+                if m == "START_V":
+                    _set_v_start(d, _get_v_start(d) + 0.01)
+                else:
+                    _set_trim(d, m, _get_trim(d, m) + 0.01)
                 print_status()
+                update_oled()
                 time.sleep(debounce_ms / 1000)
 
             if s2 == 0 and s1 == 1:
-                # SW2 short: -
-                if st.mode == "START_V":
-                    st.v_start = clamp(st.v_start - 0.01, 0.02, 1.00)
-                elif st.mode == "LOW_TRIM":
-                    st.trim_low = clamp(st.trim_low - 0.01, -0.80, 0.80)
-                elif st.mode == "MID_TRIM":
-                    st.trim_mid = clamp(st.trim_mid - 0.01, -0.80, 0.80)
-                elif st.mode == "HIGH_TRIM":
-                    st.trim_high = clamp(st.trim_high - 0.01, -0.80, 0.80)
+                if m == "START_V":
+                    _set_v_start(d, _get_v_start(d) - 0.01)
+                else:
+                    _set_trim(d, m, _get_trim(d, m) - 0.01)
                 print_status()
+                update_oled()
                 time.sleep(debounce_ms / 1000)
 
             # Drive preview at current mode point
-            if st.mode == "START_V":
-                drive(pi, st.v_start, st.trim_low)
-            elif st.mode == "LOW_TRIM":
-                drive(pi, max(st.v_start, st.v_low), st.trim_low)
-            elif st.mode == "MID_TRIM":
-                drive(pi, max(st.v_start, st.v_mid), st.trim_mid)
+            sign = 1.0 if d == "FWD" else -1.0
+            v_start = _get_v_start(d)
+            if m == "START_V":
+                v_cmd = v_start
+            elif m == "LOW_TRIM":
+                v_cmd = max(v_start, st.v_low)
+            elif m == "MID_TRIM":
+                v_cmd = max(v_start, st.v_mid)
             else:
-                drive(pi, max(st.v_start, st.v_high), st.trim_high)
+                v_cmd = max(v_start, st.v_high)
+            drive(pi, sign * v_cmd, _get_trim(d, m if m != "START_V" else "LOW_TRIM"))
 
             time.sleep(0.05)
 
         # Save
         SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        base_points = [
-            {"label": "low", "v": float(st.v_low), "trim": float(st.trim_low)},
-            {"label": "mid", "v": float(st.v_mid), "trim": float(st.trim_mid)},
-            {"label": "high", "v": float(st.v_high), "trim": float(st.trim_high)},
+        forward_points = [
+            {"label": "low", "v": float(st.v_low), "trim": float(st.trim_low_fwd)},
+            {"label": "mid", "v": float(st.v_mid), "trim": float(st.trim_mid_fwd)},
+            {"label": "high", "v": float(st.v_high), "trim": float(st.trim_high_fwd)},
+        ]
+        reverse_points = [
+            {"label": "low", "v": float(st.v_low), "trim": float(st.trim_low_rev)},
+            {"label": "mid", "v": float(st.v_mid), "trim": float(st.trim_mid_rev)},
+            {"label": "high", "v": float(st.v_high), "trim": float(st.trim_high_rev)},
         ]
         payload = {
-            "v_start": float(st.v_start),
-            # backward-compatible single table
-            "trim_points": base_points,
-            # direction-specific tables (new). initialize with same values.
-            "trim_points_forward": base_points,
-            "trim_points_reverse": base_points,
+            # backward compatibility
+            "v_start": float(st.v_start_fwd),
+            "trim_points": forward_points,
+            # new direction-specific keys
+            "v_start_forward": float(st.v_start_fwd),
+            "v_start_reverse": float(st.v_start_rev),
+            "trim_points_forward": forward_points,
+            "trim_points_reverse": reverse_points,
         }
         with SAVE_PATH.open("w", encoding="utf-8") as f:
             json.dump(payload, f)
@@ -241,6 +358,11 @@ def main() -> int:
             pi.set_servo_pulsewidth(PIN_R, 0)
         finally:
             pi.stop()
+        if oled is not None:
+            try:
+                oled.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
