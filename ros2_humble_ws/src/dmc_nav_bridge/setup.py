@@ -27,6 +27,7 @@ setup(
                 'config/lidar.yaml',
                 'config/nav2_params.yaml',
                 'config/ekf.yaml',
+                'config/rf2o.yaml',
             ],
         ),
         ('share/' + package_name, ['README_NAV2.md']),

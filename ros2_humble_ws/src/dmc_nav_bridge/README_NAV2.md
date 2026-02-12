@@ -83,7 +83,21 @@ Optional env vars:
 ```bash
 export ROBOT_ID=rasp-zero-01
 export ZENOH_CONFIG=/work/../zenoh_remote.json5
+# odom source: wheel (default) | rf2o (LiDAR odometry)
+export ODOM_SOURCE=rf2o
 ```
+
+LiDAR odometry (rf2o) notes:
+- `rf2o_laser_odometry` is added under `/work/src/rf2o_laser_odometry`.
+- Build once after pulling changes:
+  ```bash
+  cd /work
+  set +u
+  source /opt/ros/humble/setup.bash
+  set -u
+  colcon build --symlink-install --packages-select rf2o_laser_odometry dmc_nav_bridge
+  ```
+- Then start bringup with `ODOM_SOURCE=rf2o`.
 
 ## 11) Preflight check (before sending goals)
 ```bash

@@ -4,6 +4,7 @@ set -euo pipefail
 MAP_PATH=${1:-/work/maps/map.yaml}
 ROBOT_ID=${ROBOT_ID:-rasp-zero-01}
 ZENOH_CONFIG=${ZENOH_CONFIG:-/repo/zenoh_remote.json5}
+ODOM_SOURCE=${ODOM_SOURCE:-wheel}
 LOG_DIR=${LOG_DIR:-/tmp/dmc_nav2_realrobot_loc_noekf}
 mkdir -p "$LOG_DIR"
 
@@ -20,11 +21,11 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ros2 launch dmc_nav_bridge bridge_odom.launch.py \
-  robot_id:="$ROBOT_ID" zenoh_config:="$ZENOH_CONFIG" >"$LOG_DIR/bridge.log" 2>&1 &
+  robot_id:="$ROBOT_ID" zenoh_config:="$ZENOH_CONFIG" odom_source:="$ODOM_SOURCE" >"$LOG_DIR/bridge.log" 2>&1 &
 ros2 launch dmc_nav_bridge nav2_localization.launch.py \
   map:="$MAP_PATH" >"$LOG_DIR/nav2_localization.log" 2>&1 &
 
-echo "[bringup-loc-noekf] robot_id=$ROBOT_ID zenoh_config=$ZENOH_CONFIG"
+echo "[bringup-loc-noekf] robot_id=$ROBOT_ID zenoh_config=$ZENOH_CONFIG odom_source=$ODOM_SOURCE"
 echo "[bringup-loc-noekf] waiting for topics/actions..."
 sleep 10
 

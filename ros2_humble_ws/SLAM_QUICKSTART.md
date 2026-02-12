@@ -39,11 +39,14 @@ set -u
 
 export ROBOT_ID=rasp-zero-01
 export ZENOH_CONFIG=/repo/zenoh_remote.json5
+# wheel (default) | rf2o
+export ODOM_SOURCE=rf2o
 ```
 
 ---
 
 ※ 現在のSLAM解像度は `0.01m/cell`（1cm）設定です。Raspberry Piでは負荷が上がるため、重い場合は `src/dmc_nav_bridge/config/slam_toolbox.yaml` の `resolution` を見直してください。
+※ `ODOM_SOURCE=rf2o` を使う場合は、先に `colcon build --symlink-install --packages-select rf2o_laser_odometry dmc_nav_bridge` を実行してください。
 
 ## 2) SLAM起動（推奨: no-EKF）
 まずは安定性優先で no-EKF 版。
