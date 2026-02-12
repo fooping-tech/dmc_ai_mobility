@@ -16,6 +16,16 @@ Saved file (configs/motor_config.json):
     {"label":"low",  "v":0.15, "trim":0.00},
     {"label":"mid",  "v":0.30, "trim":0.00},
     {"label":"high", "v":0.50, "trim":0.00}
+  ],
+  "trim_points_forward": [
+    {"label":"low",  "v":0.15, "trim":0.00},
+    {"label":"mid",  "v":0.30, "trim":0.00},
+    {"label":"high", "v":0.50, "trim":0.00}
+  ],
+  "trim_points_reverse": [
+    {"label":"low",  "v":0.15, "trim":0.00},
+    {"label":"mid",  "v":0.30, "trim":0.00},
+    {"label":"high", "v":0.50, "trim":0.00}
   ]
 }
 
@@ -207,13 +217,18 @@ def main() -> int:
 
         # Save
         SAVE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        base_points = [
+            {"label": "low", "v": float(st.v_low), "trim": float(st.trim_low)},
+            {"label": "mid", "v": float(st.v_mid), "trim": float(st.trim_mid)},
+            {"label": "high", "v": float(st.v_high), "trim": float(st.trim_high)},
+        ]
         payload = {
             "v_start": float(st.v_start),
-            "trim_points": [
-                {"label": "low", "v": float(st.v_low), "trim": float(st.trim_low)},
-                {"label": "mid", "v": float(st.v_mid), "trim": float(st.trim_mid)},
-                {"label": "high", "v": float(st.v_high), "trim": float(st.trim_high)},
-            ],
+            # backward-compatible single table
+            "trim_points": base_points,
+            # direction-specific tables (new). initialize with same values.
+            "trim_points_forward": base_points,
+            "trim_points_reverse": base_points,
         }
         with SAVE_PATH.open("w", encoding="utf-8") as f:
             json.dump(payload, f)

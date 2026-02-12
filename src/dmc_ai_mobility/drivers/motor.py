@@ -59,11 +59,22 @@ def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> Mo
         if 0.0 < abs(v_r) < v_start:
             v_r = (1.0 if v_r >= 0 else -1.0) * v_start
 
-    # Determine trim value based on speed magnitude.
+    # Determine trim value based on speed magnitude and direction.
     trim = float(cfg.trim or 0.0)
-    if cfg.trim_points:
-        v_abs = float((abs(v_l) + abs(v_r)) * 0.5)
-        trim = _interp_trim(list(cfg.trim_points), v_abs)
+    v_signed = float((v_l + v_r) * 0.5)
+    v_abs = float((abs(v_l) + abs(v_r)) * 0.5)
+
+    points = None
+    if v_signed >= 0.0 and cfg.trim_points_forward:
+        points = cfg.trim_points_forward
+    elif v_signed < 0.0 and cfg.trim_points_reverse:
+        points = cfg.trim_points_reverse
+    elif cfg.trim_points:
+        # backward-compatible fallback
+        points = cfg.trim_points
+
+    if points:
+        trim = _interp_trim(list(points), v_abs)
 
     v_l_adj = v_l
     v_r_adj = v_r
@@ -130,11 +141,17 @@ class MockMotorDriver:
 class PigpioMotorConfig:
     pin_l: int = 19
     pin_r: int = 12
-    # Legacy single trim (used when trim_points is not provided).
+    # Legacy single trim (used when trim tables are not provided).
     trim: float = 0.0
     # Optional piecewise trim by speed (m/s). List of (v_mps, trim) sorted by v.
     # trim > 0 means "left motor stronger" so we boost right / reduce left.
+    # Backward-compatible single table.
     trim_points: Optional[list[tuple[float, float]]] = None
+    # Direction-specific tables (new):
+    # - forward: used when average commanded velocity >= 0
+    # - reverse: used when average commanded velocity < 0
+    trim_points_forward: Optional[list[tuple[float, float]]] = None
+    trim_points_reverse: Optional[list[tuple[float, float]]] = None
     # Optional minimum commanded speed magnitude to overcome stiction/deadband.
     v_start: float = 0.0
 

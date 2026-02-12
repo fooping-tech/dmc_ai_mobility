@@ -111,34 +111,43 @@ def run_robot(
     # legacy single trim
     trim = float(motor_cal.get("trim") or 0.0) if isinstance(motor_cal, dict) else 0.0
 
-    # optional multi-point trim table
+    # optional multi-point trim tables
     trim_points: Optional[list[tuple[float, float]]] = None
+    trim_points_forward: Optional[list[tuple[float, float]]] = None
+    trim_points_reverse: Optional[list[tuple[float, float]]] = None
     v_start = 0.0
+
+    def _parse_trim_points(raw) -> Optional[list[tuple[float, float]]]:
+        if not isinstance(raw, list) or not raw:
+            return None
+        pts: list[tuple[float, float]] = []
+        for it in raw:
+            if not isinstance(it, dict):
+                continue
+            try:
+                v = float(it.get("v"))
+                t = float(it.get("trim"))
+            except Exception:
+                continue
+            if v < 0:
+                continue
+            pts.append((v, t))
+        pts.sort(key=lambda x: x[0])
+        return pts or None
+
     if isinstance(motor_cal, dict):
         v_start = float(motor_cal.get("v_start") or 0.0)
-        tps = motor_cal.get("trim_points")
-        if isinstance(tps, list) and tps:
-            pts: list[tuple[float, float]] = []
-            for it in tps:
-                if not isinstance(it, dict):
-                    continue
-                try:
-                    v = float(it.get("v"))
-                    t = float(it.get("trim"))
-                except Exception:
-                    continue
-                if v < 0:
-                    continue
-                pts.append((v, t))
-            pts.sort(key=lambda x: x[0])
-            if pts:
-                trim_points = pts
+        trim_points = _parse_trim_points(motor_cal.get("trim_points"))
+        trim_points_forward = _parse_trim_points(motor_cal.get("trim_points_forward"))
+        trim_points_reverse = _parse_trim_points(motor_cal.get("trim_points_reverse"))
 
     motor_cfg = PigpioMotorConfig(
         pin_l=config.gpio.pin_l,
         pin_r=config.gpio.pin_r,
         trim=trim,
         trim_points=trim_points,
+        trim_points_forward=trim_points_forward,
+        trim_points_reverse=trim_points_reverse,
         v_start=v_start,
         deadband_pw=int(config.motor.deadband_pw),
         print_pulsewidth=print_motor_pw,
