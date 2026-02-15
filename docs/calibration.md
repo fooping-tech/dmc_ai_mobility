@@ -2,10 +2,22 @@
 
 このプロジェクトでは、実機の個体差を吸収するためにいくつかの補正値（JSON）を用意しています。
 
-- モーター補正: `configs/motor_config.json`（`v_start` と `trim_points`）
+- モーター補正: `configs/motor_config.json`（`v_start` と `trim_points`、forward/reverse 分離対応）
 - IMU 補正: `configs/imu_config.json`（`gx_off/gy_off/gz_off` など）
 
 ## モーター（`v_start` + `trim_points`）のキャリブレーション
+
+### OLED表示アーキテクチャ（重要）
+OLED は `robot_node` の描画ループが最終描画を担当し、`OledArbiter` で優先度制御します。
+
+優先順位:
+1. `locked`（CALIB 実行中など）
+2. `override`（短時間メッセージ / 画像）
+3. `base`（通常メニュー表示）
+
+CALIB 開始時は `calib` owner の lock を取得し、`CALIB\nRUNNING` を固定表示します。
+この間はメインメニュー描画や外部 OLED override で上書きされません。
+CALIB 終了時（done/failed/rejected）に lock を解除し、結果表示（DONE/FAILED/SKIPPED）へ遷移します。
 
 ### 概要
 左右のモーター出力差により「まっすぐ走らない」場合に、速度域ごとの `trim` を使って左右の速度に係数を掛けて補正します。あわせて、回転が始まる最小速度 `v_start` を測定して保存します。
@@ -33,8 +45,12 @@
 ### スイッチ操作
 - `SW1` 短押し: +（現在モードの値を増やす）
 - `SW2` 短押し: -（現在モードの値を減らす）
-- `SW1+SW2` 短押し: モード切替（`START_V` → `LOW_TRIM` → `MID_TRIM` → `HIGH_TRIM`）
+- `SW1+SW2` 短押し: モード切替
+  - `FWD_START_V` → `FWD_LOW_TRIM` → `FWD_MID_TRIM` → `FWD_HIGH_TRIM`
+  - → `REV_START_V` → `REV_LOW_TRIM` → `REV_MID_TRIM` → `REV_HIGH_TRIM`
 - `SW1+SW2` 長押し（1.2s 以上）: 保存して終了
+
+※ 校正中は OLED に現在のモード（FWD/REV + 項目）と現在値を表示します。
 
 ### 設定フォーマット
 `configs/motor_config.json` は次の形で保存されます。
@@ -43,6 +59,18 @@
 {
   "v_start": 0.10,
   "trim_points": [
+    {"label": "low", "v": 0.15, "trim": 0.00},
+    {"label": "mid", "v": 0.30, "trim": 0.00},
+    {"label": "high", "v": 0.50, "trim": 0.00}
+  ],
+  "v_start_forward": 0.10,
+  "v_start_reverse": 0.10,
+  "trim_points_forward": [
+    {"label": "low", "v": 0.15, "trim": 0.00},
+    {"label": "mid", "v": 0.30, "trim": 0.00},
+    {"label": "high", "v": 0.50, "trim": 0.00}
+  ],
+  "trim_points_reverse": [
     {"label": "low", "v": 0.15, "trim": 0.00},
     {"label": "mid", "v": 0.30, "trim": 0.00},
     {"label": "high", "v": 0.50, "trim": 0.00}
