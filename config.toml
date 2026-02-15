@@ -59,7 +59,7 @@ cooldown_s = 1.0
 # git_pull_cmd = "scripts/pull_and_restart.sh"
 # branch_cmd = "scripts/oled_switch_branch.sh"
 # branch_target = "main"
-# shutdown_cmd = "systemctl poweroff"
+shutdown_cmd = "scripts/oled_shutdown_poweroff.sh"
 # reboot_cmd = "systemctl reboot"
 # sudo_cmd = "sudo -n"
 
