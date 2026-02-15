@@ -18,6 +18,7 @@ from dmc_ai_mobility.app.oled_settings_actions import (
     ActionEvent,
     OledSettingsActionRunner,
     get_action_failure_status_text,
+    get_action_status_text,
     get_settings_item_status_duration_ms,
     get_settings_item_status_text,
 )
@@ -309,42 +310,38 @@ def run_robot(
     oled_manager = OledModeManager(oled=oled, config=config, robot_id=robot_id, logger=logger)
 
     def on_settings_action_event(event: ActionEvent) -> None:
+        action = str(event.action or "").strip().lower()
+        status = str(event.status or "").strip().lower()
 
-        # CALIB 実行中は OLED を専有ロック
-        if event.action == "calib":
-            if event.status == "started":
-                oled_arbiter.acquire("calib", "CALIB\nRUNNING")
+        lock_actions = {"calib", "wifi", "git_pull", "branch", "shutdown", "reboot"}
+        owner = f"action:{action}"
+
+        def _label(act: str) -> str:
+            return act.replace("_", " ").upper()
+
+        if action in lock_actions and status == "started":
+            started_text = get_action_status_text(action) or f"{_label(action)}\nRUNNING"
+            oled_arbiter.acquire(owner, started_text)
+            return
+
+        if action in lock_actions and status in {"done", "failed", "rejected"}:
+            oled_arbiter.release(owner)
+            if status == "done":
+                set_oled_text_override(f"{_label(action)}\nDONE", duration_ms=max(oled_override_ms, 2000))
                 return
-            if event.status in {"done", "failed", "rejected"}:
-                oled_arbiter.release("calib")
-                if event.status == "done":
-                    set_oled_text_override("CALIB\nDONE", duration_ms=max(oled_override_ms, 2000))
-                elif event.status == "failed":
-                    set_oled_text_override("CALIB\nFAILED", duration_ms=max(oled_override_ms, 3000))
+            if status == "failed":
+                if action == "git_pull":
+                    text = get_action_failure_status_text(
+                        action,
+                        reason=event.reason,
+                        returncode=event.returncode,
+                    ) or "GIT PULL\nFAILED"
                 else:
-                    set_oled_text_override("CALIB\nSKIPPED", duration_ms=max(oled_override_ms, 2000))
+                    text = f"{_label(action)}\nFAILED"
+                set_oled_text_override(text, duration_ms=max(oled_override_ms, 4000))
                 return
-
-        if event.action != "git_pull":
+            set_oled_text_override(f"{_label(action)}\nSKIPPED", duration_ms=max(oled_override_ms, 2500))
             return
-        if event.status == "done":
-            set_oled_text_override("GIT PULL\nOK", duration_ms=max(oled_override_ms, 3000))
-            return
-        if event.status == "failed":
-            text = get_action_failure_status_text(
-                event.action,
-                reason=event.reason,
-                returncode=event.returncode,
-            ) or "GIT PULL\nFAILED"
-            set_oled_text_override(text, duration_ms=max(oled_override_ms, 5000))
-            return
-        if event.status == "rejected":
-            text = get_action_failure_status_text(
-                event.action,
-                reason=event.reason,
-                returncode=event.returncode,
-            ) or "GIT PULL\nSKIPPED"
-            set_oled_text_override(text, duration_ms=max(oled_override_ms, 3000))
 
     settings_actions = OledSettingsActionRunner(
         config=config,
