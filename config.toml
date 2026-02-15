@@ -60,7 +60,7 @@ cooldown_s = 1.0
 # branch_cmd = "scripts/oled_switch_branch.sh"
 # branch_target = "main"
 shutdown_cmd = "scripts/oled_shutdown_poweroff.sh"
-# reboot_cmd = "systemctl reboot"
+reboot_cmd = "scripts/oled_reboot.sh"
 # sudo_cmd = "sudo -n"
 
 [camera]
