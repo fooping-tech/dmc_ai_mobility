@@ -292,6 +292,10 @@ def run_robot(
     oled_override_mono1: bytes = b""
     oled_override_ms = int(max(float(config.oled.override_s), 0.0) * 1000.0)
 
+    # CALIB 実行中は OLED を専有（通常メニュー描画や外部 override で上書きさせない）
+    oled_calib_lock = threading.Lock()
+    oled_calib_active: bool = False
+
     def set_oled_text_override(text: str, *, duration_ms: Optional[int] = None) -> None:
         nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
         ttl_ms = oled_override_ms if duration_ms is None else max(int(duration_ms), 0)
@@ -302,6 +306,7 @@ def run_robot(
             oled_override_until_ms = monotonic_ms() + ttl_ms
 
     def on_oled_cmd(data: dict) -> None:
+        nonlocal oled_calib_active
         try:
             cmd = OledCmd.from_dict(data)
         except Exception as e:
@@ -309,6 +314,9 @@ def run_robot(
             return
         if log_all_cmd:
             logger.info("oled cmd (recv): text=%s ts_ms=%s", cmd.text, cmd.ts_ms)
+        with oled_calib_lock:
+            if oled_calib_active:
+                return
         set_oled_text_override(cmd.text)
 
     oled_width = int(config.oled.width)
@@ -317,6 +325,25 @@ def run_robot(
     oled_manager = OledModeManager(oled=oled, config=config, robot_id=robot_id, logger=logger)
 
     def on_settings_action_event(event: ActionEvent) -> None:
+        nonlocal oled_calib_active
+
+        # CALIB 実行中は OLED を専有ロック
+        if event.action == "calib":
+            if event.status == "started":
+                with oled_calib_lock:
+                    oled_calib_active = True
+                return
+            if event.status in {"done", "failed", "rejected"}:
+                with oled_calib_lock:
+                    oled_calib_active = False
+                if event.status == "done":
+                    set_oled_text_override("CALIB\nDONE", duration_ms=max(oled_override_ms, 2000))
+                elif event.status == "failed":
+                    set_oled_text_override("CALIB\nFAILED", duration_ms=max(oled_override_ms, 3000))
+                else:
+                    set_oled_text_override("CALIB\nSKIPPED", duration_ms=max(oled_override_ms, 2000))
+                return
+
         if event.action != "git_pull":
             return
         if event.status == "done":
@@ -347,9 +374,12 @@ def run_robot(
     last_non_settings_mode = oled_manager.get_mode()
 
     def on_oled_image_mono1(payload: bytes) -> None:
-        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1, oled_calib_active
         if log_all_cmd:
             logger.info("oled image/mono1 (recv): %d bytes", len(payload))
+        with oled_calib_lock:
+            if oled_calib_active:
+                return
         if len(payload) != oled_expected_len:
             logger.warning(
                 "invalid oled image/mono1 payload size: got=%d expected=%d (%sx%s)",
@@ -392,7 +422,7 @@ def run_robot(
     ]
 
     def oled_loop() -> None:
-        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1
+        nonlocal oled_override_until_ms, oled_override_kind, oled_override_text, oled_override_mono1, oled_calib_active
         # OLED 表示は 1 つのループに集約し、優先順位で表示内容を決める。
         # 1) Zenoh から来た override（text / mono1）
         # 2) base UI mode（manager が mode switch / welcome を処理）
@@ -400,6 +430,16 @@ def run_robot(
         sleeper = PeriodicSleeper(hz)
         while not stop_event.is_set():
             now = monotonic_ms()
+
+            with oled_calib_lock:
+                calib_active = oled_calib_active
+            if calib_active:
+                try:
+                    oled.show_text("CALIB\nRUNNING")
+                except Exception as e:
+                    logger.warning("oled calib lock render failed: %s", e)
+                sleeper.sleep()
+                continue
 
             kind: Optional[str]
             text: str
