@@ -61,6 +61,7 @@ python3 examples/remote_zenoh_ui.py --robot-id rasp-zero-01 --zenoh-config ./zen
 
 補足:
 - H.264 表示には `ffmpeg` が必要です。
+- 走行キーは `↑/↓/←/→`（または `W/S(X)/A/D`）。`+` / `-` で `speed step (mps)` を操作中に変更できます。
 
 ## 設定（config.toml）
 

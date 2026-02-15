@@ -46,7 +46,7 @@ Zenoh を通信基盤とし、以下を扱います。
 
 待機中の SW 操作は通常モードで `SW1=次` / `SW2=前`、settings では `SW1=次項目` / `SW2=前項目`（循環）です。項目実行は `SW1` 長押し後の `OK?` 確認で行い、`GIT PULL` / `SHUTDOWN` / `REBOOT` 実行時は OLED に実行中ステータスを表示します。`GIT PULL` は完了時に `OK` または失敗理由（例: `DIRTY`）まで表示します。
 
-`examples/remote_zenoh_ui.py` は H.264 の受信映像と、リモート側 JPEG（`camera/image/jpeg/remote`）を並べて表示できます（PySide6/pyqtgraph と ffmpeg が必要）。
+`examples/remote_zenoh_ui.py` は H.264 の受信映像と、リモート側 JPEG（`camera/image/jpeg/remote`）を並べて表示できます（PySide6/pyqtgraph と ffmpeg が必要）。走行は `↑/↓/←/→`（または `W/S(X)/A/D`）で操作し、`+` / `-` で `speed step` を変更できます。
 
 camera/meta には capture 開始/終了や read_ms などレイテンシ計測用の追加フィールドが含まれ、`examples/remote_zenoh_tool.py camera-latency` でグラフ出力できます。`config.toml` の `[camera].auto_trim` で黒パディング対策、`buffer_size`/`latest_only`/`jpeg_quality` で遅延低減ができます。H.264 配信は `[camera_h264]` で有効化でき、`rpicam-vid`（bookworm）/`libcamera-vid` を使って配信します。`examples/remote_zenoh_tool.py camera-h264 --play` でリアルタイム表示、`--encode-out` でリモート側エンコード保存ができます。`--republish-jpeg` で H.264 を JPEG に変換してリモート側から publish できます。H.264 検証で libcamerify を無効化する場合は `systemd/dmc-ai-mobility-h264.service` を使います。
 

@@ -846,7 +846,7 @@ class MainWindow:
         self._lbl_status.setFrameStyle(QFrame.Panel | QFrame.Sunken)
         conn_form.addRow("status", self._lbl_status)
         self._lbl_keys = QLabel(
-            "motor: w/s(x)/a/d + q/e/z/c, per-wheel r/f u/j (release to stop)\n"
+            "motor: arrows or w/s(x)/a/d + q/e/z/c, per-wheel r/f u/j, speed +/- (release to stop)\n"
             "note: key capture disabled while typing in text fields"
         )
         conn_form.addRow("keys", self._lbl_keys)
@@ -1098,6 +1098,30 @@ class MainWindow:
 
         # Global key capture
         self._typing_widgets = (QLineEdit, QPlainTextEdit, QAbstractSpinBox)
+        self._speed_adjust_keys = (
+            self._Qt.Key_Minus,
+            self._Qt.Key_Plus,
+            self._Qt.Key_Equal,
+        )
+        self._motor_keys = (
+            self._Qt.Key_R,
+            self._Qt.Key_F,
+            self._Qt.Key_U,
+            self._Qt.Key_J,
+            self._Qt.Key_W,
+            self._Qt.Key_A,
+            self._Qt.Key_S,
+            self._Qt.Key_X,
+            self._Qt.Key_D,
+            self._Qt.Key_Q,
+            self._Qt.Key_E,
+            self._Qt.Key_Z,
+            self._Qt.Key_C,
+            self._Qt.Key_Up,
+            self._Qt.Key_Down,
+            self._Qt.Key_Left,
+            self._Qt.Key_Right,
+        )
 
         class _KeyFilter(QObject):
             def __init__(self, owner: "MainWindow"):
@@ -1166,21 +1190,17 @@ class MainWindow:
 
         ev = event  # QKeyEvent
         key = ev.key()
-        if key not in (
-            self._Qt.Key_R,
-            self._Qt.Key_F,
-            self._Qt.Key_U,
-            self._Qt.Key_J,
-            self._Qt.Key_W,
-            self._Qt.Key_A,
-            self._Qt.Key_S,
-            self._Qt.Key_X,
-            self._Qt.Key_D,
-            self._Qt.Key_Q,
-            self._Qt.Key_E,
-            self._Qt.Key_Z,
-            self._Qt.Key_C,
-        ):
+        if key in self._speed_adjust_keys:
+            is_increase = key == self._Qt.Key_Plus or (
+                key == self._Qt.Key_Equal and bool(ev.modifiers() & self._Qt.ShiftModifier)
+            )
+            if key == self._Qt.Key_Equal and not is_increase:
+                return False
+            if event.type() == self._QEvent.KeyPress and not ev.isAutoRepeat():
+                self._adjust_speed_step(increase=is_increase)
+            return True
+
+        if key not in self._motor_keys:
             return False
 
         if event.type() == self._QEvent.KeyPress and not ev.isAutoRepeat():
@@ -1199,6 +1219,14 @@ class MainWindow:
         except Exception:
             interval_ms = 50
         self._motor_timer.setInterval(max(10, interval_ms))
+
+    def _adjust_speed_step(self, *, increase: bool) -> None:
+        delta = float(self._spin_step.singleStep())
+        if not increase:
+            delta = -delta
+        cur = float(self._spin_step.value())
+        nxt = _clamp(cur + delta, float(self._spin_step.minimum()), float(self._spin_step.maximum()))
+        self._spin_step.setValue(float(nxt))
 
     def _on_imu_plot_changed(self, text: str) -> None:
         label = "accel" if str(text).lower() == "accel" else "gyro"
@@ -1221,10 +1249,10 @@ class MainWindow:
     def _desired_motor(self) -> tuple[float, float]:
         step = float(self._spin_step.value())
 
-        # WASD driving (combined command) takes priority over per-wheel keys.
-        # - W: forward
-        # - S/X: backward
-        # - A/D: rotate left/right (0.3x)
+        # Arrow keys or WASD driving (combined command) takes priority over per-wheel keys.
+        # - W/Up: forward
+        # - S/X/Down: backward
+        # - A/Left and D/Right: rotate left/right (0.3x)
         # - Q/E/Z/C: diagonal shortcut (W+A / W+D / S+A / S+D), with inside wheel 0.5x
         composite_keys = (
             self._Qt.Key_W,
@@ -1236,12 +1264,20 @@ class MainWindow:
             self._Qt.Key_E,
             self._Qt.Key_Z,
             self._Qt.Key_C,
+            self._Qt.Key_Up,
+            self._Qt.Key_Down,
+            self._Qt.Key_Left,
+            self._Qt.Key_Right,
         )
         if any(k in self._pressed for k in composite_keys):
-            forward = self._Qt.Key_W in self._pressed
-            backward = (self._Qt.Key_S in self._pressed) or (self._Qt.Key_X in self._pressed)
-            turn_left = self._Qt.Key_A in self._pressed
-            turn_right = self._Qt.Key_D in self._pressed
+            forward = (self._Qt.Key_W in self._pressed) or (self._Qt.Key_Up in self._pressed)
+            backward = (
+                (self._Qt.Key_S in self._pressed)
+                or (self._Qt.Key_X in self._pressed)
+                or (self._Qt.Key_Down in self._pressed)
+            )
+            turn_left = (self._Qt.Key_A in self._pressed) or (self._Qt.Key_Left in self._pressed)
+            turn_right = (self._Qt.Key_D in self._pressed) or (self._Qt.Key_Right in self._pressed)
 
             if self._Qt.Key_Q in self._pressed:
                 forward = True
