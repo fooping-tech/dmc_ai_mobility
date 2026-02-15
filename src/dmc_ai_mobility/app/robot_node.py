@@ -117,6 +117,8 @@ def run_robot(
     trim_points: Optional[list[tuple[float, float]]] = None
     trim_points_forward: Optional[list[tuple[float, float]]] = None
     trim_points_reverse: Optional[list[tuple[float, float]]] = None
+    neutral_pw_left: Optional[int] = None
+    neutral_pw_right: Optional[int] = None
     v_start = 0.0
     v_start_forward: Optional[float] = None
     v_start_reverse: Optional[float] = None
@@ -161,10 +163,16 @@ def run_robot(
         trim_points = _parse_trim_points(motor_cal.get("trim_points"))
         trim_points_forward = _parse_trim_points(motor_cal.get("trim_points_forward"))
         trim_points_reverse = _parse_trim_points(motor_cal.get("trim_points_reverse"))
+        if motor_cal.get("neutral_pw_left") is not None:
+            neutral_pw_left = int(motor_cal.get("neutral_pw_left"))
+        if motor_cal.get("neutral_pw_right") is not None:
+            neutral_pw_right = int(motor_cal.get("neutral_pw_right"))
 
     motor_cfg = PigpioMotorConfig(
         pin_l=config.gpio.pin_l,
         pin_r=config.gpio.pin_r,
+        neutral_pw_left=neutral_pw_left,
+        neutral_pw_right=neutral_pw_right,
         trim=trim,
         trim_points=trim_points,
         trim_points_forward=trim_points_forward,

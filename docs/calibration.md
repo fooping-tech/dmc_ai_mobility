@@ -46,7 +46,8 @@ CALIB 終了時（done/failed/rejected）に lock を解除し、結果表示（
 - `SW1` 短押し: +（現在モードの値を増やす）
 - `SW2` 短押し: -（現在モードの値を減らす）
 - `SW1+SW2` 短押し: モード切替
-  - `FWD_START_L` → `FWD_START_R` → `FWD_LOW_TRIM` → `FWD_MID_TRIM` → `FWD_HIGH_TRIM`
+  - `STOP_L` → `STOP_R`
+  - → `FWD_START_L` → `FWD_START_R` → `FWD_LOW_TRIM` → `FWD_MID_TRIM` → `FWD_HIGH_TRIM`
   - → `REV_START_L` → `REV_START_R` → `REV_LOW_TRIM` → `REV_MID_TRIM` → `REV_HIGH_TRIM`
 - `SW1+SW2` 長押し（1.2s 以上）: 保存して終了
 
@@ -57,6 +58,8 @@ CALIB 終了時（done/failed/rejected）に lock を解除し、結果表示（
 
 ```json
 {
+  "neutral_pw_left": 1500,
+  "neutral_pw_right": 1500,
   "v_start": 0.10,
   "trim_points": [
     {"label": "low", "v": 0.15, "trim": 0.00},

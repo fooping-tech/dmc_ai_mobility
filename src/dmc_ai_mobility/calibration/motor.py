@@ -7,12 +7,15 @@ Buttons (SW1/SW2):
 - SW1 short: + (adjust value)
 - SW2 short: - (adjust value)
 - BOTH short: cycle mode
-  FWD_START_L -> FWD_START_R -> FWD_LOW_TRIM -> FWD_MID_TRIM -> FWD_HIGH_TRIM
+  STOP_L -> STOP_R
+  -> FWD_START_L -> FWD_START_R -> FWD_LOW_TRIM -> FWD_MID_TRIM -> FWD_HIGH_TRIM
   -> REV_START_L -> REV_START_R -> REV_LOW_TRIM -> REV_MID_TRIM -> REV_HIGH_TRIM
 - BOTH long (>=1.2s): save & exit
 
 Saved file (configs/motor_config.json):
 {
+  "neutral_pw_left": 1500,
+  "neutral_pw_right": 1500,
   "v_start": 0.10,
   "trim_points": [...],
   "v_start_forward": 0.10,
@@ -125,6 +128,8 @@ def drive(pi: pigpio.pi, v_mps: float, trim: float) -> None:
 @dataclass
 class CalState:
     mode_idx: int = 0
+    neutral_l: int = NEUTRAL_PW
+    neutral_r: int = NEUTRAL_PW
     v_low: float = 0.15
     v_mid: float = 0.30
     v_high: float = 0.50
@@ -141,6 +146,8 @@ class CalState:
 
 
 MODES = [
+    ("NEU", "STOP_L"),
+    ("NEU", "STOP_R"),
     ("FWD", "START_L"),
     ("FWD", "START_R"),
     ("FWD", "LOW_TRIM"),
@@ -236,7 +243,11 @@ def main() -> int:
 
     def print_status() -> None:
         d, m = current_mode()
-        if m == "START_L":
+        if m == "STOP_L":
+            val = f"neutral_L={st.neutral_l}us"
+        elif m == "STOP_R":
+            val = f"neutral_R={st.neutral_r}us"
+        elif m == "START_L":
             val = f"v_start_L={_get_v_start(d, 'L'):.2f}"
         elif m == "START_R":
             val = f"v_start_R={_get_v_start(d, 'R'):.2f}"
@@ -244,6 +255,7 @@ def main() -> int:
             val = f"trim={_get_trim(d, m):+.3f}"
         text = (
             f"MODE={d}_{m} | {val} | "
+            f"neutral(L/R)={st.neutral_l}/{st.neutral_r}us | "
             f"fwd_start(L/R)={st.v_start_l_fwd:.2f}/{st.v_start_r_fwd:.2f} "
             f"rev_start(L/R)={st.v_start_l_rev:.2f}/{st.v_start_r_rev:.2f} | "
             f"fwd(low/mid/high)={st.trim_low_fwd:+.3f}/{st.trim_mid_fwd:+.3f}/{st.trim_high_fwd:+.3f} | "
@@ -256,7 +268,11 @@ def main() -> int:
             return
         d, m = current_mode()
         line1 = f"CAL {d} {m}"
-        if m == "START_L":
+        if m == "STOP_L":
+            line2 = f"nL {st.neutral_l}us"
+        elif m == "STOP_R":
+            line2 = f"nR {st.neutral_r}us"
+        elif m == "START_L":
             line2 = f"vL {_get_v_start(d, 'L'):.2f}"
         elif m == "START_R":
             line2 = f"vR {_get_v_start(d, 'R'):.2f}"
@@ -318,7 +334,11 @@ def main() -> int:
 
             # Per-mode adjustments
             if s1 == 0 and s2 == 1:
-                if m == "START_L":
+                if m == "STOP_L":
+                    st.neutral_l = int(clamp(st.neutral_l + 1, 1300, 1700))
+                elif m == "STOP_R":
+                    st.neutral_r = int(clamp(st.neutral_r + 1, 1300, 1700))
+                elif m == "START_L":
                     _set_v_start(d, "L", _get_v_start(d, "L") + 0.01)
                 elif m == "START_R":
                     _set_v_start(d, "R", _get_v_start(d, "R") + 0.01)
@@ -329,7 +349,11 @@ def main() -> int:
                 time.sleep(debounce_ms / 1000)
 
             if s2 == 0 and s1 == 1:
-                if m == "START_L":
+                if m == "STOP_L":
+                    st.neutral_l = int(clamp(st.neutral_l - 1, 1300, 1700))
+                elif m == "STOP_R":
+                    st.neutral_r = int(clamp(st.neutral_r - 1, 1300, 1700))
+                elif m == "START_L":
                     _set_v_start(d, "L", _get_v_start(d, "L") - 0.01)
                 elif m == "START_R":
                     _set_v_start(d, "R", _get_v_start(d, "R") - 0.01)
@@ -340,20 +364,25 @@ def main() -> int:
                 time.sleep(debounce_ms / 1000)
 
             # Drive preview at current mode point
-            sign = 1.0 if d == "FWD" else -1.0
-            if m == "START_L":
-                drive_lr(pi, sign * _get_v_start(d, "L"), 0.0)
-            elif m == "START_R":
-                drive_lr(pi, 0.0, sign * _get_v_start(d, "R"))
+            if m == "STOP_L" or m == "STOP_R":
+                # apply neutral pulse to inspect stop point drift
+                pi.set_servo_pulsewidth(PIN_L, st.neutral_l)
+                pi.set_servo_pulsewidth(PIN_R, st.neutral_r)
             else:
-                v_start_avg = max(_get_v_start(d, "L"), _get_v_start(d, "R"))
-                if m == "LOW_TRIM":
-                    v_cmd = max(v_start_avg, st.v_low)
-                elif m == "MID_TRIM":
-                    v_cmd = max(v_start_avg, st.v_mid)
+                sign = 1.0 if d == "FWD" else -1.0
+                if m == "START_L":
+                    drive_lr(pi, sign * _get_v_start(d, "L"), 0.0)
+                elif m == "START_R":
+                    drive_lr(pi, 0.0, sign * _get_v_start(d, "R"))
                 else:
-                    v_cmd = max(v_start_avg, st.v_high)
-                drive(pi, sign * v_cmd, _get_trim(d, m))
+                    v_start_avg = max(_get_v_start(d, "L"), _get_v_start(d, "R"))
+                    if m == "LOW_TRIM":
+                        v_cmd = max(v_start_avg, st.v_low)
+                    elif m == "MID_TRIM":
+                        v_cmd = max(v_start_avg, st.v_mid)
+                    else:
+                        v_cmd = max(v_start_avg, st.v_high)
+                    drive(pi, sign * v_cmd, _get_trim(d, m))
 
             time.sleep(0.05)
 
@@ -373,10 +402,13 @@ def main() -> int:
             # backward compatibility
             "v_start": float(max(st.v_start_l_fwd, st.v_start_r_fwd)),
             "trim_points": forward_points,
+            # neutral pulse calibration (stop calibration)
+            "neutral_pw_left": int(st.neutral_l),
+            "neutral_pw_right": int(st.neutral_r),
             # direction-specific aggregate keys
             "v_start_forward": float(max(st.v_start_l_fwd, st.v_start_r_fwd)),
             "v_start_reverse": float(max(st.v_start_l_rev, st.v_start_r_rev)),
-            # per-wheel start keys (new)
+            # per-wheel start keys
             "v_start_left_forward": float(st.v_start_l_fwd),
             "v_start_right_forward": float(st.v_start_r_fwd),
             "v_start_left_reverse": float(st.v_start_l_rev),

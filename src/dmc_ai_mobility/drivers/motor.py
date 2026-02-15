@@ -102,8 +102,11 @@ def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> Mo
         v_l_adj = v_l * (1.0 - trim)
         v_r_adj = v_r * (1.0 + trim)
 
-    pw_l_raw = int(cfg.neutral_pw + v_l_adj * cfg.gain_pw_per_unit)
-    pw_r_raw = int(cfg.neutral_pw - v_r_adj * cfg.gain_pw_per_unit)
+    neutral_l = int(cfg.neutral_pw_left if cfg.neutral_pw_left is not None else cfg.neutral_pw)
+    neutral_r = int(cfg.neutral_pw_right if cfg.neutral_pw_right is not None else cfg.neutral_pw)
+
+    pw_l_raw = int(neutral_l + v_l_adj * cfg.gain_pw_per_unit)
+    pw_r_raw = int(neutral_r - v_r_adj * cfg.gain_pw_per_unit)
     pw_l_clamped = _clamp_int(pw_l_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
     pw_r_clamped = _clamp_int(pw_r_raw, _PIGPIO_SERVO_MIN_PW, _PIGPIO_SERVO_MAX_PW)
 
@@ -111,8 +114,7 @@ def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> Mo
     pw_r = pw_r_clamped
     deadband_pw = int(cfg.deadband_pw)
     if deadband_pw > 0:
-        n = int(cfg.neutral_pw)
-        if abs(pw_l - n) <= deadband_pw and abs(pw_r - n) <= deadband_pw:
+        if abs(pw_l - neutral_l) <= deadband_pw and abs(pw_r - neutral_r) <= deadband_pw:
             pw_l = 0
             pw_r = 0
 
@@ -161,6 +163,9 @@ class MockMotorDriver:
 class PigpioMotorConfig:
     pin_l: int = 19
     pin_r: int = 12
+    # Optional per-wheel neutral pulsewidth (us). If None, neutral_pw is used.
+    neutral_pw_left: Optional[int] = None
+    neutral_pw_right: Optional[int] = None
     # Legacy single trim (used when trim tables are not provided).
     trim: float = 0.0
     # Optional piecewise trim by speed (m/s). List of (v_mps, trim) sorted by v.
