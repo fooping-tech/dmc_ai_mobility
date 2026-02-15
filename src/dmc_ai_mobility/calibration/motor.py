@@ -7,8 +7,8 @@ Buttons (SW1/SW2):
 - SW1 short: + (adjust value)
 - SW2 short: - (adjust value)
 - BOTH short: cycle mode
-  FWD_START_V -> FWD_LOW_TRIM -> FWD_MID_TRIM -> FWD_HIGH_TRIM
-  -> REV_START_V -> REV_LOW_TRIM -> REV_MID_TRIM -> REV_HIGH_TRIM
+  FWD_START_L -> FWD_START_R -> FWD_LOW_TRIM -> FWD_MID_TRIM -> FWD_HIGH_TRIM
+  -> REV_START_L -> REV_START_R -> REV_LOW_TRIM -> REV_MID_TRIM -> REV_HIGH_TRIM
 - BOTH long (>=1.2s): save & exit
 
 Saved file (configs/motor_config.json):
@@ -17,6 +17,10 @@ Saved file (configs/motor_config.json):
   "trim_points": [...],
   "v_start_forward": 0.10,
   "v_start_reverse": 0.10,
+  "v_start_left_forward": 0.10,
+  "v_start_right_forward": 0.10,
+  "v_start_left_reverse": 0.10,
+  "v_start_right_reverse": 0.10,
   "trim_points_forward": [...],
   "trim_points_reverse": [...]
 }
@@ -106,12 +110,16 @@ def apply_trim(v_l: float, v_r: float, trim: float) -> tuple[float, float]:
     return (v_l * (1.0 - trim), v_r * (1.0 + trim))
 
 
-def drive(pi: pigpio.pi, v_mps: float, trim: float) -> None:
-    v_l, v_r = apply_trim(v_mps, v_mps, trim)
+def drive_lr(pi: pigpio.pi, v_l: float, v_r: float) -> None:
     pw_l = int(NEUTRAL_PW + v_l * GAIN_PW_PER_MPS)
     pw_r = int(NEUTRAL_PW - v_r * GAIN_PW_PER_MPS)  # right inverted
     pi.set_servo_pulsewidth(PIN_L, pw_l)
     pi.set_servo_pulsewidth(PIN_R, pw_r)
+
+
+def drive(pi: pigpio.pi, v_mps: float, trim: float) -> None:
+    v_l, v_r = apply_trim(v_mps, v_mps, trim)
+    drive_lr(pi, v_l, v_r)
 
 
 @dataclass
@@ -120,8 +128,10 @@ class CalState:
     v_low: float = 0.15
     v_mid: float = 0.30
     v_high: float = 0.50
-    v_start_fwd: float = 0.10
-    v_start_rev: float = 0.10
+    v_start_l_fwd: float = 0.10
+    v_start_r_fwd: float = 0.10
+    v_start_l_rev: float = 0.10
+    v_start_r_rev: float = 0.10
     trim_low_fwd: float = 0.00
     trim_mid_fwd: float = 0.00
     trim_high_fwd: float = 0.00
@@ -131,11 +141,13 @@ class CalState:
 
 
 MODES = [
-    ("FWD", "START_V"),
+    ("FWD", "START_L"),
+    ("FWD", "START_R"),
     ("FWD", "LOW_TRIM"),
     ("FWD", "MID_TRIM"),
     ("FWD", "HIGH_TRIM"),
-    ("REV", "START_V"),
+    ("REV", "START_L"),
+    ("REV", "START_R"),
     ("REV", "LOW_TRIM"),
     ("REV", "MID_TRIM"),
     ("REV", "HIGH_TRIM"),
@@ -204,25 +216,36 @@ def main() -> int:
             else:
                 st.trim_high_rev = value
 
-    def _get_v_start(direction: str) -> float:
-        return st.v_start_fwd if direction == "FWD" else st.v_start_rev
+    def _get_v_start(direction: str, side: str) -> float:
+        if direction == "FWD":
+            return st.v_start_l_fwd if side == "L" else st.v_start_r_fwd
+        return st.v_start_l_rev if side == "L" else st.v_start_r_rev
 
-    def _set_v_start(direction: str, value: float) -> None:
+    def _set_v_start(direction: str, side: str, value: float) -> None:
         value = clamp(value, 0.02, 1.00)
         if direction == "FWD":
-            st.v_start_fwd = value
+            if side == "L":
+                st.v_start_l_fwd = value
+            else:
+                st.v_start_r_fwd = value
         else:
-            st.v_start_rev = value
+            if side == "L":
+                st.v_start_l_rev = value
+            else:
+                st.v_start_r_rev = value
 
     def print_status() -> None:
         d, m = current_mode()
-        if m == "START_V":
-            val = f"v_start={_get_v_start(d):.2f}"
+        if m == "START_L":
+            val = f"v_start_L={_get_v_start(d, 'L'):.2f}"
+        elif m == "START_R":
+            val = f"v_start_R={_get_v_start(d, 'R'):.2f}"
         else:
             val = f"trim={_get_trim(d, m):+.3f}"
         text = (
             f"MODE={d}_{m} | {val} | "
-            f"fwd_start={st.v_start_fwd:.2f} rev_start={st.v_start_rev:.2f} | "
+            f"fwd_start(L/R)={st.v_start_l_fwd:.2f}/{st.v_start_r_fwd:.2f} "
+            f"rev_start(L/R)={st.v_start_l_rev:.2f}/{st.v_start_r_rev:.2f} | "
             f"fwd(low/mid/high)={st.trim_low_fwd:+.3f}/{st.trim_mid_fwd:+.3f}/{st.trim_high_fwd:+.3f} | "
             f"rev(low/mid/high)={st.trim_low_rev:+.3f}/{st.trim_mid_rev:+.3f}/{st.trim_high_rev:+.3f}"
         )
@@ -233,8 +256,10 @@ def main() -> int:
             return
         d, m = current_mode()
         line1 = f"CAL {d} {m}"
-        if m == "START_V":
-            line2 = f"v_start {_get_v_start(d):.2f}"
+        if m == "START_L":
+            line2 = f"vL {_get_v_start(d, 'L'):.2f}"
+        elif m == "START_R":
+            line2 = f"vR {_get_v_start(d, 'R'):.2f}"
         else:
             line2 = f"trim {_get_trim(d, m):+.3f}"
         line3 = f"SW1+ SW2- BOTH>"
@@ -293,8 +318,10 @@ def main() -> int:
 
             # Per-mode adjustments
             if s1 == 0 and s2 == 1:
-                if m == "START_V":
-                    _set_v_start(d, _get_v_start(d) + 0.01)
+                if m == "START_L":
+                    _set_v_start(d, "L", _get_v_start(d, "L") + 0.01)
+                elif m == "START_R":
+                    _set_v_start(d, "R", _get_v_start(d, "R") + 0.01)
                 else:
                     _set_trim(d, m, _get_trim(d, m) + 0.01)
                 print_status()
@@ -302,8 +329,10 @@ def main() -> int:
                 time.sleep(debounce_ms / 1000)
 
             if s2 == 0 and s1 == 1:
-                if m == "START_V":
-                    _set_v_start(d, _get_v_start(d) - 0.01)
+                if m == "START_L":
+                    _set_v_start(d, "L", _get_v_start(d, "L") - 0.01)
+                elif m == "START_R":
+                    _set_v_start(d, "R", _get_v_start(d, "R") - 0.01)
                 else:
                     _set_trim(d, m, _get_trim(d, m) - 0.01)
                 print_status()
@@ -312,16 +341,19 @@ def main() -> int:
 
             # Drive preview at current mode point
             sign = 1.0 if d == "FWD" else -1.0
-            v_start = _get_v_start(d)
-            if m == "START_V":
-                v_cmd = v_start
-            elif m == "LOW_TRIM":
-                v_cmd = max(v_start, st.v_low)
-            elif m == "MID_TRIM":
-                v_cmd = max(v_start, st.v_mid)
+            if m == "START_L":
+                drive_lr(pi, sign * _get_v_start(d, "L"), 0.0)
+            elif m == "START_R":
+                drive_lr(pi, 0.0, sign * _get_v_start(d, "R"))
             else:
-                v_cmd = max(v_start, st.v_high)
-            drive(pi, sign * v_cmd, _get_trim(d, m if m != "START_V" else "LOW_TRIM"))
+                v_start_avg = max(_get_v_start(d, "L"), _get_v_start(d, "R"))
+                if m == "LOW_TRIM":
+                    v_cmd = max(v_start_avg, st.v_low)
+                elif m == "MID_TRIM":
+                    v_cmd = max(v_start_avg, st.v_mid)
+                else:
+                    v_cmd = max(v_start_avg, st.v_high)
+                drive(pi, sign * v_cmd, _get_trim(d, m))
 
             time.sleep(0.05)
 
@@ -339,11 +371,16 @@ def main() -> int:
         ]
         payload = {
             # backward compatibility
-            "v_start": float(st.v_start_fwd),
+            "v_start": float(max(st.v_start_l_fwd, st.v_start_r_fwd)),
             "trim_points": forward_points,
-            # new direction-specific keys
-            "v_start_forward": float(st.v_start_fwd),
-            "v_start_reverse": float(st.v_start_rev),
+            # direction-specific aggregate keys
+            "v_start_forward": float(max(st.v_start_l_fwd, st.v_start_r_fwd)),
+            "v_start_reverse": float(max(st.v_start_l_rev, st.v_start_r_rev)),
+            # per-wheel start keys (new)
+            "v_start_left_forward": float(st.v_start_l_fwd),
+            "v_start_right_forward": float(st.v_start_r_fwd),
+            "v_start_left_reverse": float(st.v_start_l_rev),
+            "v_start_right_reverse": float(st.v_start_r_rev),
             "trim_points_forward": forward_points,
             "trim_points_reverse": reverse_points,
         }

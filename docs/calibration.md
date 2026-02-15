@@ -46,8 +46,8 @@ CALIB 終了時（done/failed/rejected）に lock を解除し、結果表示（
 - `SW1` 短押し: +（現在モードの値を増やす）
 - `SW2` 短押し: -（現在モードの値を減らす）
 - `SW1+SW2` 短押し: モード切替
-  - `FWD_START_V` → `FWD_LOW_TRIM` → `FWD_MID_TRIM` → `FWD_HIGH_TRIM`
-  - → `REV_START_V` → `REV_LOW_TRIM` → `REV_MID_TRIM` → `REV_HIGH_TRIM`
+  - `FWD_START_L` → `FWD_START_R` → `FWD_LOW_TRIM` → `FWD_MID_TRIM` → `FWD_HIGH_TRIM`
+  - → `REV_START_L` → `REV_START_R` → `REV_LOW_TRIM` → `REV_MID_TRIM` → `REV_HIGH_TRIM`
 - `SW1+SW2` 長押し（1.2s 以上）: 保存して終了
 
 ※ 校正中は OLED に現在のモード（FWD/REV + 項目）と現在値を表示します。
@@ -65,6 +65,10 @@ CALIB 終了時（done/failed/rejected）に lock を解除し、結果表示（
   ],
   "v_start_forward": 0.10,
   "v_start_reverse": 0.10,
+  "v_start_left_forward": 0.10,
+  "v_start_right_forward": 0.10,
+  "v_start_left_reverse": 0.10,
+  "v_start_right_reverse": 0.10,
   "trim_points_forward": [
     {"label": "low", "v": 0.15, "trim": 0.00},
     {"label": "mid", "v": 0.30, "trim": 0.00},

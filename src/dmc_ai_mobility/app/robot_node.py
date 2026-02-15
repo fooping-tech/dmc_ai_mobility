@@ -120,6 +120,10 @@ def run_robot(
     v_start = 0.0
     v_start_forward: Optional[float] = None
     v_start_reverse: Optional[float] = None
+    v_start_left_forward: Optional[float] = None
+    v_start_right_forward: Optional[float] = None
+    v_start_left_reverse: Optional[float] = None
+    v_start_right_reverse: Optional[float] = None
 
     def _parse_trim_points(raw) -> Optional[list[tuple[float, float]]]:
         if not isinstance(raw, list) or not raw:
@@ -146,6 +150,14 @@ def run_robot(
             v_start_forward = float(motor_cal.get("v_start_forward"))
         if motor_cal.get("v_start_reverse") is not None:
             v_start_reverse = float(motor_cal.get("v_start_reverse"))
+        if motor_cal.get("v_start_left_forward") is not None:
+            v_start_left_forward = float(motor_cal.get("v_start_left_forward"))
+        if motor_cal.get("v_start_right_forward") is not None:
+            v_start_right_forward = float(motor_cal.get("v_start_right_forward"))
+        if motor_cal.get("v_start_left_reverse") is not None:
+            v_start_left_reverse = float(motor_cal.get("v_start_left_reverse"))
+        if motor_cal.get("v_start_right_reverse") is not None:
+            v_start_right_reverse = float(motor_cal.get("v_start_right_reverse"))
         trim_points = _parse_trim_points(motor_cal.get("trim_points"))
         trim_points_forward = _parse_trim_points(motor_cal.get("trim_points_forward"))
         trim_points_reverse = _parse_trim_points(motor_cal.get("trim_points_reverse"))
@@ -160,6 +172,10 @@ def run_robot(
         v_start=v_start,
         v_start_forward=v_start_forward,
         v_start_reverse=v_start_reverse,
+        v_start_left_forward=v_start_left_forward,
+        v_start_right_forward=v_start_right_forward,
+        v_start_left_reverse=v_start_left_reverse,
+        v_start_right_reverse=v_start_right_reverse,
         deadband_pw=int(config.motor.deadband_pw),
         print_pulsewidth=print_motor_pw,
     )

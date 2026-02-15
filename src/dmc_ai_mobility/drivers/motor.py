@@ -56,16 +56,28 @@ def _compute_pulsewidths(v_l: float, v_r: float, cfg: "PigpioMotorConfig") -> Mo
     v_start_fwd = float(getattr(cfg, "v_start_forward", default_v_start) or default_v_start)
     v_start_rev = float(getattr(cfg, "v_start_reverse", default_v_start) or default_v_start)
 
-    def _apply_v_start(v: float) -> float:
+    def _num_or(default_val: float, key: str) -> float:
+        val = getattr(cfg, key, None)
+        return float(val) if val is not None else float(default_val)
+
+    v_start_l_fwd = _num_or(v_start_fwd, "v_start_left_forward")
+    v_start_r_fwd = _num_or(v_start_fwd, "v_start_right_forward")
+    v_start_l_rev = _num_or(v_start_rev, "v_start_left_reverse")
+    v_start_r_rev = _num_or(v_start_rev, "v_start_right_reverse")
+
+    def _apply_v_start(v: float, *, side: str) -> float:
         if abs(v) <= 0.0:
             return v
-        thr = v_start_fwd if v >= 0.0 else v_start_rev
+        if side == "left":
+            thr = v_start_l_fwd if v >= 0.0 else v_start_l_rev
+        else:
+            thr = v_start_r_fwd if v >= 0.0 else v_start_r_rev
         if thr > 0.0 and abs(v) < thr:
             return (1.0 if v >= 0.0 else -1.0) * thr
         return v
 
-    v_l = _apply_v_start(v_l)
-    v_r = _apply_v_start(v_r)
+    v_l = _apply_v_start(v_l, side="left")
+    v_r = _apply_v_start(v_r, side="right")
 
     # Determine trim value based on speed magnitude and direction.
     trim = float(cfg.trim or 0.0)
@@ -164,6 +176,11 @@ class PigpioMotorConfig:
     v_start: float = 0.0
     v_start_forward: Optional[float] = None
     v_start_reverse: Optional[float] = None
+    # optional per-wheel overrides (highest priority)
+    v_start_left_forward: Optional[float] = None
+    v_start_right_forward: Optional[float] = None
+    v_start_left_reverse: Optional[float] = None
+    v_start_right_reverse: Optional[float] = None
 
     neutral_pw: int = 1500
     gain_pw_per_unit: float = 500.0
